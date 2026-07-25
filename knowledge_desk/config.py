@@ -24,6 +24,12 @@ class Settings(BaseSettings):
     # How long a login session stays valid.
     session_ttl_hours: int = 720
 
+    # Ingestion.
+    embed_model: str = "voyage-3"
+    chunk_size: int = 1000
+    chunk_overlap: int = 150
+    job_max_attempts: int = 3
+
     @property
     def provider(self) -> str:
         """"real" only when both keys are present; otherwise the mock fallback."""
