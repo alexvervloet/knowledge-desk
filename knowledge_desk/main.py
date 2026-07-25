@@ -12,7 +12,7 @@ from typing import Annotated
 from fastapi import Depends, FastAPI, HTTPException, Response, status
 from pydantic import BaseModel, Field
 
-from knowledge_desk import __version__, accounts, ingest
+from knowledge_desk import __version__, accounts, ingest, retrieval
 from knowledge_desk.config import settings
 from knowledge_desk.deps import (
     bearer_token,
@@ -206,3 +206,21 @@ def upload_folder(
 @app.get("/documents")
 def list_documents(scope: Annotated[TenantScope, Depends(current_scope)]) -> list[dict]:
     return scope.list_documents()
+
+
+# --- retrieval ------------------------------------------------------------
+
+
+class SearchRequest(BaseModel):
+    query: str = Field(min_length=1, max_length=500)
+    k: int = Field(default=5, ge=1, le=50)
+
+
+@app.post("/search")
+def search(
+    req: SearchRequest, scope: Annotated[TenantScope, Depends(current_scope)]
+) -> list[dict]:
+    """Nearest chunks the caller is permitted to see. Access filtering happens in
+    the candidate fetch, so results can only ever contain allowed content.
+    """
+    return retrieval.search(scope, req.query, req.k)
