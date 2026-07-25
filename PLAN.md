@@ -50,13 +50,17 @@ Reuses the house stack so the new effort goes into the enterprise parts.
 
 ## Phase 0: plumbing (done when the keyless smoke passes in CI)
 
-- [ ] Repo, per-repo `.venv`, `requirements.txt`, `pyproject.toml` (installable package)
-- [ ] `docker-compose.yml` brings up Postgres with pgvector on a dedicated port
-      (5432 is rag-at-scale, 5434 is askrepo-live; this repo takes the next free one)
-- [ ] `python check_setup.py` all green (db reachable, extension present, env sane)
-- [ ] FastAPI skeleton with `/healthz` reporting provider (mock vs real)
-- [ ] `pytest` green: healthz, a mock ask returning a canned answer, 404 and 422 shapes
-- [ ] GitHub Actions runs check_setup plus pytest plus compose up on a fresh runner
+- [x] Repo, per-repo `.venv`, `requirements.txt`, `pyproject.toml` (installable package)
+- [x] `docker-compose.yml` brings up Postgres with pgvector on a dedicated port
+      (5432 rag-at-scale, 5434 askrepo-live, 5433/5435 in use; this repo takes **5436**)
+- [x] `python check_setup.py` all green (db reachable, pgvector v0.8.4 present, provider mode)
+- [x] FastAPI skeleton with `/healthz` reporting provider (mock vs real)
+- [x] `pytest` green: healthz, a mock ask returning a canned answer, 404 and 422 shapes
+- [x] GitHub Actions runs check_setup plus pytest plus compose up on a fresh runner
+
+**Phase 0 complete** (CI green 2026-07-25). Postgres 17.10 + pgvector 0.8.4 on
+host port 5436; 6 smoke tests pass hermetically; the compose end-to-end is the
+fresh-runner proof.
 
 ## Phase 1: tenancy and auth skeleton (done when isolation tests pass, no LLM yet)
 
