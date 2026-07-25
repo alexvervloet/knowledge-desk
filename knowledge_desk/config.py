@@ -21,6 +21,9 @@ class Settings(BaseSettings):
     # When true, refuse to start in mock mode instead of falling back loudly.
     provider_strict: bool = False
 
+    # How long a login session stays valid.
+    session_ttl_hours: int = 720
+
     @property
     def provider(self) -> str:
         """"real" only when both keys are present; otherwise the mock fallback."""
