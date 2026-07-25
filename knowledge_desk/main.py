@@ -12,7 +12,7 @@ from typing import Annotated
 from fastapi import Depends, FastAPI, HTTPException, Response, status
 from pydantic import BaseModel, Field
 
-from knowledge_desk import __version__, accounts
+from knowledge_desk import __version__, accounts, ingest
 from knowledge_desk.config import settings
 from knowledge_desk.deps import (
     bearer_token,
@@ -174,3 +174,35 @@ def add_group_member(
     user_id = accounts.find_user_id(req.email)
     scope.add_group_member(group_id, user_id)
     return {"group_id": group_id, "user_id": user_id}
+
+
+# --- sources and documents ------------------------------------------------
+
+LOCAL_FOLDER_SOURCE = "local-folder"
+
+
+class UploadedDocument(BaseModel):
+    path: str = Field(min_length=1, max_length=1024)
+    content: str = Field(max_length=1_000_000)
+    acl: list[str] | None = None
+
+
+class FolderUploadRequest(BaseModel):
+    documents: list[UploadedDocument] = Field(max_length=1000)
+
+
+@app.post("/sources/folder", status_code=status.HTTP_202_ACCEPTED)
+def upload_folder(
+    req: FolderUploadRequest, scope: Annotated[TenantScope, Depends(current_scope)]
+) -> dict:
+    """Reconcile an org's local-folder documents and enqueue ingest jobs for the
+    ones that changed. Returns immediately (202); the worker does the embedding.
+    """
+    scope.require_role("admin")
+    items = [d.model_dump() for d in req.documents]
+    return ingest.sync_documents(scope.org_id, LOCAL_FOLDER_SOURCE, items)
+
+
+@app.get("/documents")
+def list_documents(scope: Annotated[TenantScope, Depends(current_scope)]) -> list[dict]:
+    return scope.list_documents()
