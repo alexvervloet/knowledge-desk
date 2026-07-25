@@ -13,6 +13,7 @@ from dataclasses import dataclass
 from typing import Any
 
 import psycopg
+from pgvector.psycopg import Vector
 
 from knowledge_desk.auth import role_at_least
 from knowledge_desk.db import connect
@@ -108,6 +109,43 @@ class TenantScope:
                 " as chunk_count"
                 " from documents d where d.org_id = %s order by d.path",
                 (self.org_id,),
+            ).fetchall()
+
+    # --- retrieval --------------------------------------------------------
+
+    def principals(self) -> list[str]:
+        """The caller's access set: org-wide, their own user principal, and one
+        principal per group they belong to. Computed fresh on every call, so a
+        group change takes effect on the next query with no cache to invalidate.
+        """
+        with connect() as conn:
+            groups = conn.execute(
+                "select gm.group_id from group_members gm"
+                " join groups g on g.id = gm.group_id"
+                " where g.org_id = %s and gm.user_id = %s",
+                (self.org_id, self.ctx.user_id),
+            ).fetchall()
+        principals = ["public-to-org", f"user:{self.ctx.user_id}"]
+        principals += [f"group:{r['group_id']}" for r in groups]
+        return principals
+
+    def search(self, query_embedding: list[float], k: int = 5) -> list[dict[str, Any]]:
+        """Nearest chunks the caller is allowed to see. The ACL filter is part of
+        the candidate fetch (`d.acl ?| principals`), so a forbidden chunk is never
+        ranked, never scored, and cannot leak through a missed post-filter. The
+        org_id filter sits on top as the tenant boundary.
+        """
+        principals = self.principals()
+        vec = Vector(query_embedding)  # binds as `vector`, not double precision[]
+        with connect() as conn:
+            return conn.execute(
+                "select c.document_id, c.ordinal, c.text, d.path,"
+                " (c.embedding <=> %s) as distance"
+                " from chunks c join documents d on d.id = c.document_id"
+                " where c.org_id = %s and d.status = 'ingested'"
+                " and d.acl ?| %s"
+                " order by c.embedding <=> %s limit %s",
+                (vec, self.org_id, principals, vec, k),
             ).fetchall()
 
     # --- members ----------------------------------------------------------
