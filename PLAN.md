@@ -67,15 +67,25 @@ fresh-runner proof.
 Build the multi-tenant spine before any AI touches it. Two orgs, seeded users,
 and a proof that one org cannot read the other's rows through any endpoint.
 
-- [ ] Schema and migrations: `orgs`, `users`, `memberships` (user, org, role),
+- [x] Schema and migrations: `orgs`, `users`, `memberships` (user, org, role),
       `groups`, `group_members`, `sessions`. Every domain table carries `org_id`.
-- [ ] Tenant-aware data layer: a scoped session object that stamps and filters
-      `org_id` on every read and write; direct table access outside it is a lint error
-- [ ] Auth: signup creates an org plus an owner; login issues a session; logout;
-      `require_role` dependency for admin-only routes
-- [ ] Isolation test suite: user in org A gets 403 or 404 on every org B resource;
-      role checks (member cannot invite, admin can); session expiry
-- [ ] Fixtures: two orgs (`acme`, `globex`) with users and groups, reused everywhere
+      Plain-SQL migrations via a small runner (`python -m knowledge_desk.migrate`).
+- [x] Tenant-aware data layer: `TenantScope` stamps and filters `org_id` on every
+      org-scoped read and write; a foreign-org id is a 404, indistinguishable from
+      absent. Identity and grants (users, memberships, sessions) live in `accounts`;
+      org data lives behind the scope. Convention for now, not yet a lint rule.
+- [x] Auth: signup creates an org plus an owner; login issues a session (bearer
+      token, sha256-hashed at rest); logout; `require_role` gate for admin routes.
+      Passwords: bcrypt over a sha256 pre-hash (no 72-byte truncation).
+- [x] Isolation test suite: user in org A gets 404 on org B resources; role gates
+      (member cannot create groups or add members, admin can); session expiry,
+      logout, and revoked-membership all invalidate a token
+- [x] Fixtures: `clean_db` truncates between DB tests; smoke tests stay hermetic.
+      Two orgs (`acme`, `globex`) built per test rather than a shared seed.
+
+**Phase 1 complete.** 21 tests green (6 hermetic smoke plus 15 tenancy). The
+load-bearing test: org A gets a 404, not a 403, on org B's group id, so existence
+does not leak across tenants.
 
 ## Phase 2: ingestion pipeline (done when a resync re-embeds only what changed)
 
