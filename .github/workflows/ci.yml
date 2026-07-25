@@ -37,6 +37,9 @@ jobs:
       - name: Preflight
         run: python check_setup.py
 
+      - name: Migrate
+        run: python -m knowledge_desk.migrate
+
       - name: Tests
         run: python -m pytest -q
 
