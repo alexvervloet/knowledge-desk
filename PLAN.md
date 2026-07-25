@@ -122,16 +122,26 @@ The crux. Retrieval must never surface a chunk from a document the caller cannot
 access, and this must hold at the SQL layer, not as a post-filter that a bug
 could skip.
 
-- [ ] Document ACLs: each document lists permitted principals; a `public-to-org`
-      shortcut for org-wide docs; group membership resolves into the principal set
-- [ ] Access-scoped retrieval: candidate fetch joins the ACL and the caller's
-      principals so forbidden chunks are never even ranked; `org_id` filter on top
-- [ ] The permission-leak eval: seed a document readable only by user X containing
-      a unique secret string; assert user Y's retrieval and answer never contain it,
-      across paraphrases and direct "what is the secret" prompts. This eval is a
-      hard gate in CI (Phase 6), not a one-off check.
-- [ ] Group-change correctness: removing a user from a group immediately removes
-      access on the next query (no stale index of permissions)
+- [x] Document ACLs: `documents.acl` is a JSONB principal list (`public-to-org`,
+      `user:<id>`, `group:<id>`); a caller's principals are `public-to-org` plus
+      their own user principal plus one per group they belong to
+- [x] Access-scoped retrieval: `TenantScope.search` filters candidates in SQL with
+      `d.acl ?| principals` (GIN-indexed) inside the `org_id` and `status='ingested'`
+      filter, so a forbidden chunk is never scored. Query vector binds via pgvector's
+      `Vector` (a bare list is `double precision[]`, no `<=>` operator).
+- [x] The permission-leak test: a secret readable only by user X is never returned
+      to user Y, for the exact content, an unrelated query, and a "what is the secret"
+      probe (the guarantee is structural, not ranking-dependent). Wired into CI now;
+      it also becomes a hard eval gate in Phase 6.
+- [x] Group-change correctness: principals are recomputed per query, so deleting a
+      group membership revokes retrieval access on the very next search
+
+**Phase 3 complete.** 41 tests green (adds 7 retrieval). Distinctive result: the
+access filter is in the candidate fetch, so cross-user and cross-tenant leakage is
+prevented structurally rather than by a post-filter a later bug could skip.
+
+Deferred: a remove-from-group API (the revocation test deletes the membership row
+directly); it belongs with group management in Phase 7.
 
 ## Phase 4: the assistant (done when a grounded, access-correct cited answer streams)
 
@@ -227,6 +237,11 @@ best part of the write-up)
   `docker start knowledge-desk-pg` brings it back with the volume intact. CI is
   unaffected (it starts its own). Same family as askrepo-live's Docker sleep
   quirk. Not a code issue; just restart the container after the laptop sleeps.
+- **2026-07-25**: a plain Python list of floats binds as `double precision[]`,
+  which has no `<=>` operator against `vector`, so a similarity query fails with
+  `UndefinedFunction` even though inserting the same list into a `vector` column
+  works (the column supplies the type there). Wrap query vectors in pgvector's
+  `Vector`. In pgvector 0.3.6 it imports from `pgvector.psycopg`, not `pgvector`.
 - **2026-07-25**: incremental resync is worth the content-hash bookkeeping. An
   unchanged 25-file corpus resyncs in ~12ms versus ~1377ms for the first drain,
   because the hash match skips chunking and embedding entirely. At real Voyage
