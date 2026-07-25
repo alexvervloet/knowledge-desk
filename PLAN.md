@@ -92,20 +92,29 @@ does not leak across tenants.
 Local folder connector first: deterministic, testable in CI, no external OAuth.
 An org uploads a folder, a worker chunks, embeds, and stores per tenant.
 
-- [ ] `jobs` table plus a worker loop: claim (skip locked), run, retry with backoff,
-      dead-letter after N attempts, idempotency key = content hash
-- [ ] Local folder connector: walk an uploaded tree, one `documents` row per file
-      with a captured ACL (Phase 3 uses it), chunk, embed via Voyage, store vectors
-      scoped to `org_id`
-- [ ] Incremental resync: re-uploading a folder re-embeds only changed or new files
-      (by hash), marks deletions, leaves the rest untouched
-- [ ] Failure handling: a poison document fails its job without wedging the queue;
-      partial ingest is resumable
-- [ ] Table (fill on first real ingest):
+- [x] `jobs` table plus a worker loop: claim (`for update skip locked`), run,
+      retry with backoff, dead-letter after `max_attempts`, idempotency key on the
+      job (`ingest:<doc_id>:<content_hash>`) so re-upload of identical bytes is a no-op
+- [x] Local folder connector: upload captures one `documents` row per file with a
+      captured ACL (Phase 3 uses it), chunk, embed (Voyage, mock fallback), vectors
+      scoped to `org_id`. Content is captured at upload; the worker embeds off the
+      request path.
+- [x] Incremental resync: re-uploading re-embeds only changed/new files (by hash),
+      marks deletions (status `deleted`, chunks removed), leaves the rest untouched
+- [x] Failure handling: a poison document dead-letters (status `failed`) without
+      wedging the queue; the good documents in the same batch still ingest
+- [x] Table (mock embedder, 25 synthetic markdown files, this laptop; a keyed
+      Voyage run with real cost is a `secrun` step):
 
-| org | files | chunks | embed time | embed cost ($) | resync (changed only) |
-|---|---|---|---|---|---|
-| acme | | | | | |
+| run | files | chunks | drain (embed+store) | resync unchanged |
+|---|---|---|---|---|
+| mock | 25 | 100 | 1377ms | 12ms |
+
+Resync of an unchanged corpus is ~115x cheaper than the first drain (12ms vs
+1377ms): the hash check skips embedding entirely, which is the whole point.
+
+**Phase 2 complete.** 34 tests green (adds 6 queue, 7 ingestion). Embedding is
+off the request path behind a durable, idempotent, retrying queue.
 
 ## Phase 3: permissions-aware retrieval (done when the leak test cannot leak)
 
@@ -203,3 +212,23 @@ could skip.
 
 (keep a running log here the moment something surprises you; this becomes the
 best part of the write-up)
+
+- **2026-07-25**: Postgres `text` columns cannot store a NUL (0x00) byte at all;
+  the insert fails with `DataError` before any application code runs. So a binary
+  or garbage file cannot be "captured then failed at embed time" the way I first
+  modeled it. Two consequences: binary filtering belongs at the connector
+  boundary (the local-folder connector should skip non-text files), and the
+  reachable worker-side failure to test is an embedder/provider rejection, not a
+  NUL byte. The mock embedder now fails on a storable sentinel (`[[EMBED-FAIL]]`)
+  instead. Binary-file filtering at the connector is deferred (noted here).
+- **2026-07-25**: the local dev pgvector container keeps stopping between work
+  sessions. Cause is benign: clean shutdown (exit 0, not OOM) with a multi-hour
+  jump in the log timestamps, i.e. the Mac slept and Docker Desktop paused it.
+  `docker start knowledge-desk-pg` brings it back with the volume intact. CI is
+  unaffected (it starts its own). Same family as askrepo-live's Docker sleep
+  quirk. Not a code issue; just restart the container after the laptop sleeps.
+- **2026-07-25**: incremental resync is worth the content-hash bookkeeping. An
+  unchanged 25-file corpus resyncs in ~12ms versus ~1377ms for the first drain,
+  because the hash match skips chunking and embedding entirely. At real Voyage
+  latency and cost the gap is far larger, since the skipped work is the network
+  embed calls, not the local hash.
