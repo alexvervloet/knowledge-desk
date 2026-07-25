@@ -3,8 +3,10 @@ vector) so ingestion is reproducible and testable with no keys or network. The
 Voyage embedder is used only when a Voyage key is present.
 
 Both produce 1024-d vectors to match the `chunks.embedding` column. The mock
-raises on a NUL byte, standing in for a binary or garbage file that should fail
-its ingest job rather than be embedded as if it were text.
+raises on the sentinel EMBED_FAIL_MARKER, standing in for an input the embedding
+provider rejects (a permanent per-document failure), so the queue's retry and
+dead-letter path is exercisable in tests. Binary content is handled earlier, at
+the connector boundary: Postgres text columns cannot even store a NUL byte.
 """
 
 from __future__ import annotations
@@ -17,6 +19,10 @@ from knowledge_desk.config import settings
 
 EMBED_DIM = 1024
 
+# A document containing this marker fails embedding on every attempt. Test hook
+# that mimics a provider rejecting a specific input.
+EMBED_FAIL_MARKER = "[[EMBED-FAIL]]"
+
 
 def _unit(vec: list[float]) -> list[float]:
     norm = math.sqrt(sum(x * x for x in vec)) or 1.0
@@ -28,8 +34,8 @@ class MockEmbedder:
     dim = EMBED_DIM
 
     def _one(self, text: str) -> list[float]:
-        if "\x00" in text:
-            raise ValueError("cannot embed binary content (NUL byte present)")
+        if EMBED_FAIL_MARKER in text:
+            raise ValueError("embedding provider rejected this input")
         seed = int.from_bytes(hashlib.sha256(text.encode("utf-8")).digest()[:8], "big")
         rng = random.Random(seed)
         return _unit([rng.uniform(-1.0, 1.0) for _ in range(self.dim)])
