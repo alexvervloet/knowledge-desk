@@ -145,12 +145,22 @@ directly); it belongs with group management in Phase 7.
 
 ## Phase 4: the assistant (done when a grounded, access-correct cited answer streams)
 
-- [ ] Ask endpoint: retrieve within the caller's permissions, answer with Claude,
-      stream SSE (meta, sources, tokens, done), citations deep-link to the source doc
-- [ ] Refusal when retrieval is empty: says it has nothing it is allowed to cite,
-      rather than answering from model priors
-- [ ] Feedback capture: thumbs plus optional note per answer, stored with the trace id
-- [ ] Frontend ask view renders streaming answer, citations, and the provider label
+- [x] Ask endpoint: `POST /ask` retrieves within the caller's permissions and
+      streams SSE (meta, sources, token, done). Answer model `claude-opus-5`
+      (env-overridable) at low effort; loud mock fallback with no keys. Sources
+      carry document_id/ordinal/path for the frontend to deep-link later.
+- [x] Refusal when retrieval is empty: no sources frame, a plain "nothing I'm
+      allowed to cite" message, no model call. The Phase 3 boundary carries
+      through to the answer: user Y never sees user X's secret in a generated reply.
+- [x] Feedback capture: `POST /feedback` (up/down plus optional note), one per
+      user per answer, attached to a recorded `answers` row and org-scoped. The
+      answer row is where Phase 9's trace id will attach.
+- [ ] Frontend ask view: **deferred to Phase 7** to build all the React at once.
+      The SSE contract is curl- and test-verifiable now; no UI yet.
+
+**Phase 4 complete (backend).** 47 tests green (adds 8 assistant). The answer
+stream is access-scoped end to end and refuses rather than answering ungrounded.
+Real Claude answers are a `secrun` step (keyless mock by default).
 
 ## Phase 5: operational controls (done when the abuse and quota tests pass)
 
@@ -183,9 +193,13 @@ directly); it belongs with group management in Phase 7.
 - [ ] Postgres row-level security added as defense in depth behind the data layer,
       with a test that a raw query without the org context returns nothing
 
-## Phase 7: admin dashboard (done when an org admin can run the org from the UI)
+## Phase 7: admin dashboard and ask UI (done when an org admin can run the org from the UI)
 
-- [ ] Members and roles: invite, change role, remove; group management
+- [ ] Ask view (pulled forward from Phase 4): renders the streaming answer,
+      citations that deep-link to the source document, and the provider label;
+      thumbs up/down posts to `/feedback`
+- [ ] Members and roles: invite, change role, remove; group management (this is
+      also where the remove-from-group API deferred in Phase 3 gets built)
 - [ ] Sources: connected folders, last sync, per-document ACL view and edit
 - [ ] Usage: questions, cost, quota headroom, top queries, recent audit events
 - [ ] Mobile pass and a demo GIF (scripted, like askrepo-live's `demo:gif`)
