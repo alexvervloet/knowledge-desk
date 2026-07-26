@@ -193,14 +193,25 @@ answer's cost is on its row for the Phase 7 usage view.
 
 ## Phase 6: governance and evals-as-gate (done when CI blocks a permission regression)
 
-- [ ] Eval suite wired into CI as a required check: grounded-answer quality plus
-      the Phase 3 permission-leak eval; a PR that reintroduces a leak fails to merge
-- [ ] PII pass: detect and flag obvious PII at ingest; document what is stored and
-      where; redact PII from logs and traces
-- [ ] Retention and deletion: an org can delete a document (vectors, chunks, ACLs
-      all removed) and export or delete its whole tenant; verified by a test
-- [ ] Postgres row-level security added as defense in depth behind the data layer,
-      with a test that a raw query without the org context returns nothing
+- [x] Eval suite wired into CI as a required check: `python -m evals.run` gates
+      the build on the permission-leak eval and a grounded-answer eval. A change
+      that reintroduces a leak fails CI. Same evals asserted from `test_evals.py`.
+- [x] PII pass: `pii.py` detects email/phone/ssn/card shapes; documents are flagged
+      at ingest (`documents.pii_types`, shown in listings) and PII is redacted from
+      audit-log detail. Data handling is documented in `.env.example` and the plan.
+- [x] Retention and deletion: `DELETE /documents/{id}` removes a document and its
+      chunks (ACL lives on the row); `GET /org/export` returns members + documents;
+      `DELETE /org` (owner only) cascades the whole tenant. Verified by tests.
+- [x] Postgres row-level security as defense in depth: FORCE RLS with an
+      `org_isolation` policy keyed on the `app.current_org` GUC, on every org table
+      that carries `org_id`. The app connects as a least-privilege role (`kd_app`)
+      so RLS actually applies (owner/superuser bypasses it); migrations run as the
+      owner. A test proves a raw query with no org context returns nothing.
+
+**Phase 6 complete.** 67 tests green (adds 8 governance) plus the CI eval gate.
+The distinctive result: tenant isolation is now enforced in three independent
+layers, the data layer's `org_id` filter, the ACL candidate-fetch, and RLS
+underneath, so no single missed filter can leak across tenants.
 
 ## Phase 7: admin dashboard and ask UI (done when an org admin can run the org from the UI)
 
