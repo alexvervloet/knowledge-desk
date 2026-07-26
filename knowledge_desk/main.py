@@ -216,6 +216,34 @@ def list_documents(scope: Annotated[TenantScope, Depends(current_scope)]) -> lis
     return scope.list_documents()
 
 
+@app.delete("/documents/{document_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_document(
+    document_id: str, scope: Annotated[TenantScope, Depends(current_scope)]
+) -> Response:
+    scope.require_role("admin")
+    scope.delete_document(document_id)
+    audit.log(scope.org_id, scope.ctx.user_id, "document.deleted", {"document_id": document_id})
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+# --- tenant retention -----------------------------------------------------
+
+
+@app.get("/org/export")
+def export_org(scope: Annotated[TenantScope, Depends(current_scope)]) -> dict:
+    scope.require_role("admin")
+    return scope.export()
+
+
+@app.delete("/org", status_code=status.HTTP_204_NO_CONTENT)
+def delete_org(scope: Annotated[TenantScope, Depends(current_scope)]) -> Response:
+    """Delete the whole tenant. Owner only, and irreversible: cascades to every
+    org-scoped table."""
+    scope.require_role("owner")
+    accounts.delete_org(scope.org_id)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
 # --- retrieval ------------------------------------------------------------
 
 

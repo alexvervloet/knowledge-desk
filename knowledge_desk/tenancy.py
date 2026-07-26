@@ -111,6 +111,22 @@ class TenantScope:
                 (self.org_id,),
             ).fetchall()
 
+    def delete_document(self, document_id: str) -> None:
+        """Delete a document and everything derived from it. Chunks cascade via
+        the foreign key; the ACL lives on the document row, so it goes too."""
+        with connect() as conn:
+            row = conn.execute(
+                "delete from documents where id = %s and org_id = %s returning id",
+                (document_id, self.org_id),
+            ).fetchone()
+        if row is None:
+            raise NotFound(f"document not found: {document_id}")
+
+    def export(self) -> dict[str, Any]:
+        """A portable snapshot of the org's members and documents (metadata, not
+        raw content). Backs the tenant data-export requirement."""
+        return {"members": self.list_members(), "documents": self.list_documents()}
+
     # --- retrieval --------------------------------------------------------
 
     def principals(self) -> list[str]:

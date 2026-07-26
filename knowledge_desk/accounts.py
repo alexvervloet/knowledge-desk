@@ -154,6 +154,14 @@ def delete_session(raw_token: str) -> None:
         )
 
 
+def delete_org(org_id: str) -> None:
+    """Delete an entire tenant. Every org-scoped table references orgs with
+    `on delete cascade`, so this removes memberships, documents, chunks, answers,
+    audit records, and sessions in one statement."""
+    with connect() as conn:
+        conn.execute("delete from orgs where id = %s", (org_id,))
+
+
 def find_user_id(email: str) -> str:
     email = email.strip().lower()
     with connect() as conn:
