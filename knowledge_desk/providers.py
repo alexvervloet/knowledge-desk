@@ -1,29 +1,104 @@
-"""Answer providers. Phase 0 ships only the mock; the real (Voyage + Claude)
-provider lands in Phase 4.
+"""Answer providers. Both stream an answer grounded in retrieved context and
+report token usage plus a cost estimate at the end. The mock is loud on purpose
+(a banner in every answer) so a mock reply can never be mistaken for a real,
+grounded one. The real provider (Claude) is used only when a key is present.
 
-The mock is loud on purpose: every answer it returns is clearly labeled as a
-fallback so a mock answer can never be mistaken for a real, grounded one.
+A provider's `stream(question, contexts)` yields event dicts:
+  {"type": "token", "text": ...}   zero or more, in order
+  {"type": "usage", "input_tokens": int, "output_tokens": int, "cost_usd": float}   exactly one, last
 """
 
 from __future__ import annotations
 
+from typing import Any, Iterator
+
 from knowledge_desk.config import settings
 
-MOCK_BANNER = "[MOCK FALLBACK] no provider keys set; this answer is not grounded."
+MOCK_BANNER = "[MOCK] no answer-model key set; this reply is not model-generated."
+
+# Input/output USD per 1M tokens. Used only for the done-frame estimate.
+_PRICING = {
+    "claude-opus-5": (5.0, 25.0),
+    "claude-opus-4-8": (5.0, 25.0),
+    "claude-sonnet-5": (3.0, 15.0),
+}
+
+_SYSTEM = (
+    "You are a knowledge assistant. Answer the question using only the provided"
+    " context passages. Cite the passages you use by their [n] number. If the"
+    " context does not contain the answer, say you don't have anything you're"
+    " allowed to cite and do not answer from general knowledge."
+)
 
 
-class MockProvider:
+def _cost(model: str, input_tokens: int, output_tokens: int) -> float:
+    in_rate, out_rate = _PRICING.get(model, _PRICING["claude-opus-5"])
+    return round(input_tokens / 1e6 * in_rate + output_tokens / 1e6 * out_rate, 6)
+
+
+def _render_context(contexts: list[dict[str, Any]]) -> str:
+    return "\n\n".join(
+        f"[{i + 1}] ({c['path']}) {c['text']}" for i, c in enumerate(contexts)
+    )
+
+
+class MockAnswerProvider:
     name = "mock"
 
-    def answer(self, question: str) -> str:
-        return f"{MOCK_BANNER} You asked: {question}"
+    def stream(
+        self, question: str, contexts: list[dict[str, Any]]
+    ) -> Iterator[dict[str, Any]]:
+        cited = contexts[0]["path"] if contexts else "unknown"
+        answer = (
+            f"{MOCK_BANNER} Based on the {len(contexts)} retrieved passage(s), "
+            f"the most relevant source is [1] ({cited})."
+        )
+        for word in answer.split():
+            yield {"type": "token", "text": word + " "}
+        input_tokens = len(_render_context(contexts)) // 4 + len(question) // 4
+        output_tokens = len(answer) // 4
+        yield {
+            "type": "usage",
+            "input_tokens": input_tokens,
+            "output_tokens": output_tokens,
+            "cost_usd": 0.0,
+        }
 
 
-def get_provider():
-    """Return the active provider. Phase 0 always resolves to the mock; the
-    real branch is added in Phase 4. PROVIDER_STRICT is honored at config time.
-    """
-    if settings.provider == "real":
-        # Placeholder until Phase 4 wires Voyage + Claude.
-        raise NotImplementedError("real provider arrives in Phase 4")
-    return MockProvider()
+class ClaudeAnswerProvider:
+    name = "claude"
+
+    def __init__(self) -> None:
+        import anthropic  # lazy: only needed when a key is set
+
+        self._client = anthropic.Anthropic(api_key=settings.anthropic_api_key)
+        self._model = settings.answer_model
+
+    def stream(
+        self, question: str, contexts: list[dict[str, Any]]
+    ) -> Iterator[dict[str, Any]]:
+        user = f"Context:\n{_render_context(contexts)}\n\nQuestion: {question}"
+        with self._client.messages.stream(
+            model=self._model,
+            max_tokens=settings.answer_max_tokens,
+            system=_SYSTEM,
+            output_config={"effort": "low"},
+            messages=[{"role": "user", "content": user}],
+        ) as stream:
+            for text in stream.text_stream:
+                yield {"type": "token", "text": text}
+            final = stream.get_final_message()
+        usage = final.usage
+        yield {
+            "type": "usage",
+            "input_tokens": usage.input_tokens,
+            "output_tokens": usage.output_tokens,
+            "cost_usd": _cost(self._model, usage.input_tokens, usage.output_tokens),
+        }
+
+
+def get_answer_provider():
+    """Claude when an Anthropic key is present, otherwise the loud mock."""
+    if settings.anthropic_api_key:
+        return ClaudeAnswerProvider()
+    return MockAnswerProvider()
