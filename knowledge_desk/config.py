@@ -35,6 +35,14 @@ class Settings(BaseSettings):
     answer_max_tokens: int = 2048
     retrieval_k: int = 6
 
+    # Operational controls (all env-overridable).
+    daily_budget_usd: float = 5.0          # per org, rolling 24h
+    monthly_question_cap: int = 1000       # per org, calendar month
+    rate_burst: int = 5                    # per user, token-bucket burst
+    rate_per_min: int = 30                 # per user, sustained
+    org_doc_cap: int = 1000                # per org, total documents
+    org_storage_bytes_cap: int = 50_000_000  # per org, total content bytes
+
     @property
     def provider(self) -> str:
         """"real" only when both keys are present; otherwise the mock fallback."""
