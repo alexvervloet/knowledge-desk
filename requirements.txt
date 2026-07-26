@@ -7,6 +7,7 @@ python-dotenv==1.0.1
 bcrypt==4.2.1
 pgvector==0.3.6
 voyageai==0.3.7
+anthropic==0.120.0
 
 # tests
 pytest==8.3.4

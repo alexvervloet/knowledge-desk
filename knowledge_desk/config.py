@@ -30,6 +30,11 @@ class Settings(BaseSettings):
     chunk_overlap: int = 150
     job_max_attempts: int = 3
 
+    # Assistant.
+    answer_model: str = "claude-opus-5"
+    answer_max_tokens: int = 2048
+    retrieval_k: int = 6
+
     @property
     def provider(self) -> str:
         """"real" only when both keys are present; otherwise the mock fallback."""
