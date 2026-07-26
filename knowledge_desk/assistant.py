@@ -15,7 +15,8 @@ from __future__ import annotations
 
 from typing import Any, Iterator
 
-from knowledge_desk import retrieval
+from knowledge_desk import audit, retrieval
+from knowledge_desk.config import settings
 from knowledge_desk.providers import get_answer_provider
 from knowledge_desk.tenancy import TenantScope
 
@@ -25,13 +26,39 @@ REFUSAL = (
 )
 
 
+def _limit_block(scope: TenantScope) -> str | None:
+    """Return a reason string if this org is over an operational limit, else
+    None. Checked before any model call so spend and volume are hard-capped."""
+    if scope.spend_last_24h() >= settings.daily_budget_usd:
+        return "daily budget exhausted"
+    if scope.questions_this_month() >= settings.monthly_question_cap:
+        return "monthly question limit reached"
+    return None
+
+
 def answer_stream(
     scope: TenantScope, question: str, k: int
 ) -> Iterator[dict[str, Any]]:
-    contexts = retrieval.search(scope, question, k)
     provider = get_answer_provider()
+
+    # Hard limits first: a blocked question is recorded but never reaches the model.
+    blocked_reason = _limit_block(scope)
+    if blocked_reason is not None:
+        answer_id = scope.record_answer(question, provider.name, refused=False)
+        scope.mark_blocked(answer_id)
+        audit.log(scope.org_id, scope.ctx.user_id, "question.blocked",
+                  {"answer_id": answer_id, "reason": blocked_reason})
+        yield {"type": "meta", "answer_id": answer_id, "provider": provider.name}
+        yield {"type": "error",
+               "message": f"[LIMIT] request blocked: {blocked_reason}."
+                          " No answer was generated."}
+        return
+
+    contexts = retrieval.search(scope, question, k)
     refused = not contexts
     answer_id = scope.record_answer(question, provider.name, refused)
+    audit.log(scope.org_id, scope.ctx.user_id, "question.asked",
+              {"answer_id": answer_id, "refused": refused})
 
     yield {"type": "meta", "answer_id": answer_id, "provider": provider.name}
 
@@ -54,6 +81,8 @@ def answer_stream(
     try:
         for event in provider.stream(question, contexts):
             if event["type"] == "usage":
+                scope.finalize_answer(answer_id, event["input_tokens"],
+                                      event["output_tokens"], event["cost_usd"])
                 yield {
                     "type": "done",
                     "usage": {"input_tokens": event["input_tokens"],
