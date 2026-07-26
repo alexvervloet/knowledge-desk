@@ -164,23 +164,32 @@ Real Claude answers are a `secrun` step (keyless mock by default).
 
 ## Phase 5: operational controls (done when the abuse and quota tests pass)
 
-- [ ] Cost attribution ledger: per-answer token and dollar estimate written with
-      `org_id` and user; a rolling per-org daily budget that blocks the model call
-      with a friendly frame once spent
-- [ ] Quotas: per-org monthly question cap, per-user rate limit (token bucket),
-      per-org document and storage cap on ingest
-- [ ] Loud degradation: provider down or over budget returns a clear frame and a
-      banner, never a silent wrong answer; observability failures never take the app down
-- [ ] Audit log: append-only record of logins, invites, ingests, and questions
-      (who, which org, what, when), queryable by an org admin
-- [ ] Table (fill once chosen, all env-overridable):
+- [x] Cost attribution ledger: each answer records `input_tokens`, `output_tokens`,
+      and `cost_usd` (finalized from the done frame) with `org_id` and user. A
+      rolling per-org 24h budget is summed from the answers table and blocks the
+      model call before it runs once spent.
+- [x] Quotas: per-org monthly question cap, per-user token-bucket rate limit
+      (in-memory, settings-driven, injectable clock), per-org document and content
+      -byte caps enforced on ingest before any embedding work.
+- [x] Loud degradation: over budget or over cap yields a `[LIMIT]` error frame and
+      no model call; a provider exception yields an error frame instead of a 500;
+      audit writes are best-effort so a logging failure never takes the app down.
+- [x] Audit log: append-only `audit_log` of org.created, user.login, member.added,
+      source.synced, question.asked, and question.blocked; readable by an org admin
+      at `GET /audit`.
+- [x] Table (defaults; all env-overridable):
 
-| knob | value | env var |
+| knob | default | env var |
 |---|---|---|
-| per-user rate | | |
-| per-org daily budget ($) | | |
-| per-org monthly questions | | |
-| per-org storage cap | | |
+| per-user rate (burst / sustained) | 5 / 30 per min | `RATE_BURST` / `RATE_PER_MIN` |
+| per-org daily budget ($) | 5.00 per 24h | `DAILY_BUDGET_USD` |
+| per-org monthly questions | 1000 | `MONTHLY_QUESTION_CAP` |
+| per-org documents | 1000 | `ORG_DOC_CAP` |
+| per-org storage | 50 MB | `ORG_STORAGE_BYTES_CAP` |
+
+**Phase 5 complete.** 57 tests green (adds 10 ops). Budget and caps are enforced
+before the model call, the rate limit returns 429 with `Retry-After`, and every
+answer's cost is on its row for the Phase 7 usage view.
 
 ## Phase 6: governance and evals-as-gate (done when CI blocks a permission regression)
 
