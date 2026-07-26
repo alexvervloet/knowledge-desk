@@ -7,12 +7,14 @@ route acts through a TenantScope so tenant isolation is enforced in one place.
 
 from __future__ import annotations
 
+import json
 from typing import Annotated
 
 from fastapi import Depends, FastAPI, HTTPException, Response, status
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
-from knowledge_desk import __version__, accounts, ingest, retrieval
+from knowledge_desk import __version__, accounts, assistant, ingest, retrieval
 from knowledge_desk.config import settings
 from knowledge_desk.deps import (
     bearer_token,
@@ -20,7 +22,6 @@ from knowledge_desk.deps import (
     current_scope,
     register_error_handlers,
 )
-from knowledge_desk.providers import get_provider
 from knowledge_desk.tenancy import AuthContext, TenantScope
 
 app = FastAPI(title="Knowledge Desk", version=__version__)
@@ -46,16 +47,6 @@ def get_collection(name: str):
     if name not in _KNOWN_COLLECTIONS:
         raise HTTPException(status_code=404, detail=f"unknown collection: {name}")
     return {"name": name}
-
-
-class AskRequest(BaseModel):
-    question: str = Field(min_length=1, max_length=500)
-
-
-@app.post("/ask")
-def ask(req: AskRequest) -> dict:
-    provider = get_provider()
-    return {"answer": provider.answer(req.question), "provider": provider.name}
 
 
 # --- auth -----------------------------------------------------------------
@@ -224,3 +215,39 @@ def search(
     the candidate fetch, so results can only ever contain allowed content.
     """
     return retrieval.search(scope, req.query, req.k)
+
+
+# --- assistant ------------------------------------------------------------
+
+
+class AskRequest(BaseModel):
+    question: str = Field(min_length=1, max_length=500)
+    k: int | None = Field(default=None, ge=1, le=50)
+
+
+@app.post("/ask")
+def ask(req: AskRequest, scope: Annotated[TenantScope, Depends(current_scope)]):
+    """Stream a grounded, access-scoped answer as SSE. Each event is one
+    `data: {json}` frame: meta, sources, token(s), then done (or error).
+    """
+    k = req.k or settings.retrieval_k
+
+    def frames():
+        for event in assistant.answer_stream(scope, req.question, k):
+            yield f"data: {json.dumps(event)}\n\n"
+
+    return StreamingResponse(frames(), media_type="text/event-stream")
+
+
+class FeedbackRequest(BaseModel):
+    answer_id: str
+    rating: str = Field(pattern=r"^(up|down)$")
+    note: str | None = Field(default=None, max_length=2000)
+
+
+@app.post("/feedback", status_code=status.HTTP_201_CREATED)
+def feedback(
+    req: FeedbackRequest, scope: Annotated[TenantScope, Depends(current_scope)]
+) -> dict:
+    scope.add_feedback(req.answer_id, req.rating, req.note)
+    return {"answer_id": req.answer_id, "rating": req.rating}
