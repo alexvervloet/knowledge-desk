@@ -45,7 +45,7 @@ class TenantScope:
     # --- groups -----------------------------------------------------------
 
     def list_groups(self) -> list[dict[str, Any]]:
-        with connect() as conn:
+        with connect(self.org_id) as conn:
             return conn.execute(
                 "select id, name, created_at from groups"
                 " where org_id = %s order by name",
@@ -55,7 +55,7 @@ class TenantScope:
     def create_group(self, name: str) -> dict[str, Any]:
         self.require_role("admin")
         try:
-            with connect() as conn:
+            with connect(self.org_id) as conn:
                 return conn.execute(
                     "insert into groups(org_id, name) values (%s, %s)"
                     " returning id, name, created_at",
@@ -69,7 +69,7 @@ class TenantScope:
         belongs to another org is indistinguishable from one that does not
         exist: the org_id filter is the isolation boundary.
         """
-        with connect() as conn:
+        with connect(self.org_id) as conn:
             row = conn.execute(
                 "select id, name, created_at from groups"
                 " where id = %s and org_id = %s",
@@ -82,7 +82,7 @@ class TenantScope:
     def add_group_member(self, group_id: str, user_id: str) -> None:
         self.require_role("admin")
         self.get_group(group_id)  # 404s if the group is not in this org
-        with connect() as conn:
+        with connect(self.org_id) as conn:
             is_member = conn.execute(
                 "select 1 from memberships where user_id = %s and org_id = %s",
                 (user_id, self.org_id),
@@ -101,7 +101,7 @@ class TenantScope:
     # --- documents --------------------------------------------------------
 
     def list_documents(self) -> list[dict[str, Any]]:
-        with connect() as conn:
+        with connect(self.org_id) as conn:
             return conn.execute(
                 "select d.id, d.path, d.source, d.status, d.content_hash,"
                 " d.pii_types, d.updated_at,"
@@ -114,7 +114,7 @@ class TenantScope:
     def delete_document(self, document_id: str) -> None:
         """Delete a document and everything derived from it. Chunks cascade via
         the foreign key; the ACL lives on the document row, so it goes too."""
-        with connect() as conn:
+        with connect(self.org_id) as conn:
             row = conn.execute(
                 "delete from documents where id = %s and org_id = %s returning id",
                 (document_id, self.org_id),
@@ -134,7 +134,7 @@ class TenantScope:
         principal per group they belong to. Computed fresh on every call, so a
         group change takes effect on the next query with no cache to invalidate.
         """
-        with connect() as conn:
+        with connect(self.org_id) as conn:
             groups = conn.execute(
                 "select gm.group_id from group_members gm"
                 " join groups g on g.id = gm.group_id"
@@ -153,7 +153,7 @@ class TenantScope:
         """
         principals = self.principals()
         vec = Vector(query_embedding)  # binds as `vector`, not double precision[]
-        with connect() as conn:
+        with connect(self.org_id) as conn:
             return conn.execute(
                 "select c.document_id, c.ordinal, c.text, d.path,"
                 " (c.embedding <=> %s) as distance"
@@ -167,7 +167,7 @@ class TenantScope:
     # --- answers and feedback --------------------------------------------
 
     def record_answer(self, question: str, provider: str, refused: bool) -> str:
-        with connect() as conn:
+        with connect(self.org_id) as conn:
             row = conn.execute(
                 "insert into answers(org_id, user_id, question, provider, refused)"
                 " values (%s, %s, %s, %s, %s) returning id",
@@ -178,7 +178,7 @@ class TenantScope:
     def finalize_answer(
         self, answer_id: str, input_tokens: int, output_tokens: int, cost_usd: float
     ) -> None:
-        with connect() as conn:
+        with connect(self.org_id) as conn:
             conn.execute(
                 "update answers set input_tokens = %s, output_tokens = %s,"
                 " cost_usd = %s where id = %s and org_id = %s",
@@ -186,14 +186,14 @@ class TenantScope:
             )
 
     def mark_blocked(self, answer_id: str) -> None:
-        with connect() as conn:
+        with connect(self.org_id) as conn:
             conn.execute(
                 "update answers set blocked = true where id = %s and org_id = %s",
                 (answer_id, self.org_id),
             )
 
     def spend_last_24h(self) -> float:
-        with connect() as conn:
+        with connect(self.org_id) as conn:
             row = conn.execute(
                 "select coalesce(sum(cost_usd), 0) as spend from answers"
                 " where org_id = %s and created_at > now() - interval '24 hours'",
@@ -202,7 +202,7 @@ class TenantScope:
         return float(row["spend"])
 
     def questions_this_month(self) -> int:
-        with connect() as conn:
+        with connect(self.org_id) as conn:
             row = conn.execute(
                 "select count(*) as n from answers where org_id = %s"
                 " and created_at >= date_trunc('month', now())",
@@ -213,7 +213,7 @@ class TenantScope:
     def storage_usage(self) -> dict[str, int]:
         """Live document count and total content bytes for this org (excluding
         deleted documents). Used to enforce ingest caps."""
-        with connect() as conn:
+        with connect(self.org_id) as conn:
             row = conn.execute(
                 "select count(*) as docs,"
                 " coalesce(sum(octet_length(content)), 0) as bytes"
@@ -223,7 +223,7 @@ class TenantScope:
         return {"docs": int(row["docs"]), "bytes": int(row["bytes"])}
 
     def list_audit(self, limit: int = 100) -> list[dict[str, Any]]:
-        with connect() as conn:
+        with connect(self.org_id) as conn:
             return conn.execute(
                 "select a.action, a.detail, a.created_at, u.email as actor"
                 " from audit_log a left join users u on u.id = a.actor_user_id"
@@ -232,7 +232,7 @@ class TenantScope:
             ).fetchall()
 
     def add_feedback(self, answer_id: str, rating: str, note: str | None) -> None:
-        with connect() as conn:
+        with connect(self.org_id) as conn:
             answer = conn.execute(
                 "select 1 from answers where id = %s and org_id = %s",
                 (answer_id, self.org_id),
@@ -251,7 +251,7 @@ class TenantScope:
     # --- members ----------------------------------------------------------
 
     def list_members(self) -> list[dict[str, Any]]:
-        with connect() as conn:
+        with connect(self.org_id) as conn:
             return conn.execute(
                 "select u.id, u.email, m.role, m.created_at"
                 " from memberships m join users u on u.id = m.user_id"

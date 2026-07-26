@@ -13,7 +13,10 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
+    # Owner role: migrations, DDL, and preflight. Superuser in dev.
     database_url: str = "postgresql://kd:kd@localhost:5436/knowledge_desk"
+    # Least-privilege app role: every runtime query. Non-owner so RLS applies.
+    app_database_url: str = "postgresql://kd_app:kd_app@localhost:5436/knowledge_desk"
 
     anthropic_api_key: str | None = None
     voyage_api_key: str | None = None

@@ -15,12 +15,19 @@ from knowledge_desk.config import settings
 
 
 @contextmanager
-def connect() -> Iterator[psycopg.Connection]:
+def connect(org_id: str | None = None) -> Iterator[psycopg.Connection]:
     """A connection that commits on clean exit and rolls back on error. The
     pgvector adapter is registered so Python lists bind to `vector` columns.
+
+    When `org_id` is given, it is set as the `app.current_org` GUC, which the
+    row-level-security policies on org-scoped tables key on. With no org_id
+    those policies see NULL and return no rows, so a query that forgets its
+    tenant filter yields nothing rather than leaking across tenants.
     """
-    conn = psycopg.connect(settings.database_url, row_factory=dict_row)
+    conn = psycopg.connect(settings.app_database_url, row_factory=dict_row)
     register_vector(conn)
+    if org_id is not None:
+        conn.execute("select set_config('app.current_org', %s, false)", (org_id,))
     try:
         yield conn
         conn.commit()

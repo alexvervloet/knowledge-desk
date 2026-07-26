@@ -37,7 +37,7 @@ def sync_documents(
     incoming_paths = {item["path"] for item in items}
     to_enqueue: list[tuple[str, str]] = []  # (document_id, content_hash)
 
-    with connect() as conn:
+    with connect(org_id) as conn:
         existing = {
             r["path"]: r
             for r in conn.execute(
@@ -108,7 +108,7 @@ def process_ingest_document(org_id: str, payload: dict[str, Any]) -> None:
     on failure so the queue can retry and eventually dead-letter.
     """
     document_id = payload["document_id"]
-    with connect() as conn:
+    with connect(org_id) as conn:
         doc = conn.execute(
             "select id, content, status from documents"
             " where id = %s and org_id = %s",
@@ -120,7 +120,7 @@ def process_ingest_document(org_id: str, payload: dict[str, Any]) -> None:
     texts = chunk_text(doc["content"])
     embeddings = get_embedder().embed_documents(texts) if texts else []
 
-    with connect() as conn:
+    with connect(org_id) as conn:
         conn.execute("delete from chunks where document_id = %s", (document_id,))
         for ordinal, (text, embedding) in enumerate(zip(texts, embeddings)):
             conn.execute(
@@ -163,7 +163,7 @@ def run_pending(max_jobs: int = 1000) -> dict[str, int]:
 
 
 def _mark_document_failed(org_id: str, document_id: str) -> None:
-    with connect() as conn:
+    with connect(org_id) as conn:
         conn.execute(
             "update documents set status = 'failed', updated_at = now()"
             " where id = %s and org_id = %s",

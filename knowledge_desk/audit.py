@@ -26,7 +26,7 @@ def log(
 ) -> None:
     try:
         safe_detail = pii.redact_detail(detail or {})
-        with connect() as conn:
+        with connect(org_id) as conn:
             conn.execute(
                 "insert into audit_log(org_id, actor_user_id, action, detail)"
                 " values (%s, %s, %s, %s)",
