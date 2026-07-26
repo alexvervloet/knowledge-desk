@@ -148,6 +148,34 @@ class TenantScope:
                 (vec, self.org_id, principals, vec, k),
             ).fetchall()
 
+    # --- answers and feedback --------------------------------------------
+
+    def record_answer(self, question: str, provider: str, refused: bool) -> str:
+        with connect() as conn:
+            row = conn.execute(
+                "insert into answers(org_id, user_id, question, provider, refused)"
+                " values (%s, %s, %s, %s, %s) returning id",
+                (self.org_id, self.ctx.user_id, question, provider, refused),
+            ).fetchone()
+        return str(row["id"])
+
+    def add_feedback(self, answer_id: str, rating: str, note: str | None) -> None:
+        with connect() as conn:
+            answer = conn.execute(
+                "select 1 from answers where id = %s and org_id = %s",
+                (answer_id, self.org_id),
+            ).fetchone()
+            if answer is None:
+                raise NotFound(f"answer not found: {answer_id}")
+            try:
+                conn.execute(
+                    "insert into feedback(org_id, user_id, answer_id, rating, note)"
+                    " values (%s, %s, %s, %s, %s)",
+                    (self.org_id, self.ctx.user_id, answer_id, rating, note),
+                )
+            except psycopg.errors.UniqueViolation as exc:
+                raise Conflict("feedback already recorded for this answer") from exc
+
     # --- members ----------------------------------------------------------
 
     def list_members(self) -> list[dict[str, Any]]:
