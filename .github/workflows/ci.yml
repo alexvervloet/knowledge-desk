@@ -43,6 +43,9 @@ jobs:
       - name: Tests
         run: python -m pytest -q
 
+      - name: Eval gate (permission leak + grounded answer)
+        run: python -m evals.run
+
       - name: Tear down
         if: always()
         run: docker compose down -v

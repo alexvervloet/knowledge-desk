@@ -11,10 +11,13 @@ license = { text = "MIT" }
 dynamic = ["dependencies"]
 
 [tool.setuptools]
-packages = ["knowledge_desk"]
+packages = ["knowledge_desk", "evals"]
 
 [tool.setuptools.dynamic]
 dependencies = { file = ["requirements.txt"] }
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+markers = [
+    "eval: merge-gating evals (permission leak, grounded answer)",
+]
