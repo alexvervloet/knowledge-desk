@@ -159,6 +159,62 @@ class TenantScope:
             ).fetchone()
         return str(row["id"])
 
+    def finalize_answer(
+        self, answer_id: str, input_tokens: int, output_tokens: int, cost_usd: float
+    ) -> None:
+        with connect() as conn:
+            conn.execute(
+                "update answers set input_tokens = %s, output_tokens = %s,"
+                " cost_usd = %s where id = %s and org_id = %s",
+                (input_tokens, output_tokens, cost_usd, answer_id, self.org_id),
+            )
+
+    def mark_blocked(self, answer_id: str) -> None:
+        with connect() as conn:
+            conn.execute(
+                "update answers set blocked = true where id = %s and org_id = %s",
+                (answer_id, self.org_id),
+            )
+
+    def spend_last_24h(self) -> float:
+        with connect() as conn:
+            row = conn.execute(
+                "select coalesce(sum(cost_usd), 0) as spend from answers"
+                " where org_id = %s and created_at > now() - interval '24 hours'",
+                (self.org_id,),
+            ).fetchone()
+        return float(row["spend"])
+
+    def questions_this_month(self) -> int:
+        with connect() as conn:
+            row = conn.execute(
+                "select count(*) as n from answers where org_id = %s"
+                " and created_at >= date_trunc('month', now())",
+                (self.org_id,),
+            ).fetchone()
+        return int(row["n"])
+
+    def storage_usage(self) -> dict[str, int]:
+        """Live document count and total content bytes for this org (excluding
+        deleted documents). Used to enforce ingest caps."""
+        with connect() as conn:
+            row = conn.execute(
+                "select count(*) as docs,"
+                " coalesce(sum(octet_length(content)), 0) as bytes"
+                " from documents where org_id = %s and status <> 'deleted'",
+                (self.org_id,),
+            ).fetchone()
+        return {"docs": int(row["docs"]), "bytes": int(row["bytes"])}
+
+    def list_audit(self, limit: int = 100) -> list[dict[str, Any]]:
+        with connect() as conn:
+            return conn.execute(
+                "select a.action, a.detail, a.created_at, u.email as actor"
+                " from audit_log a left join users u on u.id = a.actor_user_id"
+                " where a.org_id = %s order by a.created_at desc limit %s",
+                (self.org_id, limit),
+            ).fetchall()
+
     def add_feedback(self, answer_id: str, rating: str, note: str | None) -> None:
         with connect() as conn:
             answer = conn.execute(
