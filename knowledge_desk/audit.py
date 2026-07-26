@@ -14,6 +14,7 @@ from typing import Any
 
 from psycopg.types.json import Json
 
+from knowledge_desk import pii
 from knowledge_desk.db import connect
 
 
@@ -24,11 +25,12 @@ def log(
     detail: dict[str, Any] | None = None,
 ) -> None:
     try:
+        safe_detail = pii.redact_detail(detail or {})
         with connect() as conn:
             conn.execute(
                 "insert into audit_log(org_id, actor_user_id, action, detail)"
                 " values (%s, %s, %s, %s)",
-                (org_id, actor_user_id, action, Json(detail or {})),
+                (org_id, actor_user_id, action, Json(safe_detail)),
             )
     except Exception as exc:  # noqa: BLE001 - audit must never break the request
         print(f"[audit] failed to record {action}: {exc}", file=sys.stderr)

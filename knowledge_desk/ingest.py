@@ -14,7 +14,7 @@ from typing import Any
 
 from psycopg.types.json import Json
 
-from knowledge_desk import jobs
+from knowledge_desk import jobs, pii
 from knowledge_desk.chunking import chunk_text
 from knowledge_desk.db import connect
 from knowledge_desk.embeddings import get_embedder
@@ -61,14 +61,17 @@ def sync_documents(
                 unchanged += 1
                 continue
 
+            pii_types = pii.detect_types(content)
             doc = conn.execute(
-                "insert into documents(org_id, source, path, content, content_hash, acl, status)"
-                " values (%s, %s, %s, %s, %s, %s, 'pending')"
+                "insert into documents(org_id, source, path, content, content_hash, acl, pii_types, status)"
+                " values (%s, %s, %s, %s, %s, %s, %s, 'pending')"
                 " on conflict (org_id, source, path) do update set"
                 " content = excluded.content, content_hash = excluded.content_hash,"
-                " acl = excluded.acl, status = 'pending', updated_at = now()"
+                " acl = excluded.acl, pii_types = excluded.pii_types,"
+                " status = 'pending', updated_at = now()"
                 " returning id",
-                (org_id, source, item["path"], content, content_hash, Json(acl)),
+                (org_id, source, item["path"], content, content_hash, Json(acl),
+                 Json(pii_types)),
             ).fetchone()
             enqueued += 1
             # Enqueue after the row is committed by the surrounding block; the
