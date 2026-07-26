@@ -14,7 +14,7 @@ from fastapi import Depends, FastAPI, HTTPException, Response, status
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
-from knowledge_desk import __version__, accounts, assistant, ingest, retrieval
+from knowledge_desk import __version__, accounts, assistant, audit, ingest, retrieval
 from knowledge_desk.config import settings
 from knowledge_desk.deps import (
     bearer_token,
@@ -22,6 +22,7 @@ from knowledge_desk.deps import (
     current_scope,
     register_error_handlers,
 )
+from knowledge_desk.ratelimit import limiter
 from knowledge_desk.tenancy import AuthContext, TenantScope
 
 app = FastAPI(title="Knowledge Desk", version=__version__)
@@ -77,6 +78,7 @@ def signup(req: SignupRequest) -> TokenResponse:
         req.org_slug, req.org_name, req.email, req.password
     )
     token = accounts.create_session(ctx)
+    audit.log(ctx.org_id, ctx.user_id, "org.created", {"slug": req.org_slug})
     return TokenResponse(token=token, org_id=ctx.org_id, role=ctx.role)
 
 
@@ -84,6 +86,7 @@ def signup(req: SignupRequest) -> TokenResponse:
 def login(req: LoginRequest) -> TokenResponse:
     ctx = accounts.authenticate(req.email, req.password, req.org_slug)
     token = accounts.create_session(ctx)
+    audit.log(ctx.org_id, ctx.user_id, "user.login", {})
     return TokenResponse(token=token, org_id=ctx.org_id, role=ctx.role)
 
 
@@ -118,6 +121,8 @@ def add_member(
 ) -> dict:
     scope.require_role("admin")
     user_id = accounts.add_member(scope.org_id, req.email, req.password, req.role)
+    audit.log(scope.org_id, scope.ctx.user_id, "member.added",
+              {"user_id": user_id, "role": req.role})
     return {"user_id": user_id}
 
 
@@ -191,7 +196,19 @@ def upload_folder(
     """
     scope.require_role("admin")
     items = [d.model_dump() for d in req.documents]
-    return ingest.sync_documents(scope.org_id, LOCAL_FOLDER_SOURCE, items)
+
+    # Enforce per-org caps before enqueuing any embedding work. Conservative:
+    # an update counts toward the incoming total, which can only over-protect.
+    usage = scope.storage_usage()
+    incoming_bytes = sum(len(d.content.encode("utf-8")) for d in req.documents)
+    if usage["bytes"] + incoming_bytes > settings.org_storage_bytes_cap:
+        raise HTTPException(status_code=413, detail="org storage cap exceeded")
+    if usage["docs"] + len(req.documents) > settings.org_doc_cap:
+        raise HTTPException(status_code=413, detail="org document cap exceeded")
+
+    result = ingest.sync_documents(scope.org_id, LOCAL_FOLDER_SOURCE, items)
+    audit.log(scope.org_id, scope.ctx.user_id, "source.synced", result)
+    return result
 
 
 @app.get("/documents")
@@ -229,7 +246,18 @@ class AskRequest(BaseModel):
 def ask(req: AskRequest, scope: Annotated[TenantScope, Depends(current_scope)]):
     """Stream a grounded, access-scoped answer as SSE. Each event is one
     `data: {json}` frame: meta, sources, token(s), then done (or error).
+
+    A per-user rate limit is enforced up front as a 429; the per-org budget and
+    question caps are enforced inside the stream as a loud limit frame (see the
+    assistant), so the client always gets a clear signal rather than silence.
     """
+    allowed, retry_after = limiter.check(scope.ctx.user_id)
+    if not allowed:
+        raise HTTPException(
+            status_code=429, detail="rate limit exceeded",
+            headers={"Retry-After": str(int(retry_after) + 1)},
+        )
+
     k = req.k or settings.retrieval_k
 
     def frames():
@@ -237,6 +265,16 @@ def ask(req: AskRequest, scope: Annotated[TenantScope, Depends(current_scope)]):
             yield f"data: {json.dumps(event)}\n\n"
 
     return StreamingResponse(frames(), media_type="text/event-stream")
+
+
+# --- audit ----------------------------------------------------------------
+
+
+@app.get("/audit")
+def audit_log(scope: Annotated[TenantScope, Depends(current_scope)]) -> list[dict]:
+    """Recent audit events for the caller's org. Admin only."""
+    scope.require_role("admin")
+    return scope.list_audit()
 
 
 class FeedbackRequest(BaseModel):
