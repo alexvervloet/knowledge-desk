@@ -82,11 +82,15 @@ def test_monthly_question_cap_blocks_after_limit(monkeypatch):
     assert "[LIMIT]" in error["message"] and "monthly" in error["message"]
 
 
+def org_of(token: str) -> str:
+    return client.get("/me", headers=auth(token)).json()["org_id"]
+
+
 def test_blocked_question_is_recorded(monkeypatch):
     monkeypatch.setattr(settings, "daily_budget_usd", 0.0)
     token = signup("acme", "o@acme.test")
     aid = next(e for e in ask_events(token, "q?") if e["type"] == "meta")["answer_id"]
-    with connect() as conn:
+    with connect(org_of(token)) as conn:  # RLS: reads need the org context set
         row = conn.execute("select blocked from answers where id = %s", (aid,)).fetchone()
     assert row["blocked"] is True
 
@@ -139,7 +143,7 @@ def test_answer_records_usage():
     token = signup("acme", "o@acme.test")
     upload(token, [{"path": "doc.txt", "content": "the sky is blue today", "acl": ["public-to-org"]}])
     aid = next(e for e in ask_events(token, "the sky is blue today") if e["type"] == "meta")["answer_id"]
-    with connect() as conn:
+    with connect(org_of(token)) as conn:
         row = conn.execute(
             "select output_tokens, refused, blocked from answers where id = %s", (aid,)
         ).fetchone()

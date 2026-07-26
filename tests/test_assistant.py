@@ -130,7 +130,8 @@ def test_answer_is_recorded_as_refused_when_no_context():
 
     token = signup("acme", "o@acme.test")
     answer_id = _by_type(ask(token, "anything?"), "meta")[0]["answer_id"]
-    with connect() as conn:
+    org_id = client.get("/me", headers=auth(token)).json()["org_id"]
+    with connect(org_id) as conn:  # RLS: reads need the org context set
         row = conn.execute("select refused from answers where id = %s", (answer_id,)).fetchone()
     assert row["refused"] is True
 

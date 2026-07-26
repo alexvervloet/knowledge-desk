@@ -2,9 +2,10 @@
 the Phase 0 smoke tests stay hermetic.
 """
 
+import psycopg
 import pytest
 
-from knowledge_desk.db import connect
+from knowledge_desk.config import settings
 from knowledge_desk.migrate import apply_pending
 from knowledge_desk.ratelimit import limiter
 
@@ -20,9 +21,11 @@ def _migrated():
 def clean_db(_migrated):
     """Truncate all domain tables before the test for a deterministic slate.
     Truncating orgs cascades to every org-scoped table (documents, answers,
-    audit_log, ...). The in-memory rate limiter is reset too so per-test
-    request counts start fresh."""
-    with connect() as conn:
+    audit_log, ...). Runs as the owner (TRUNCATE is not granted to the app role,
+    and is not subject to RLS anyway). The in-memory rate limiter is reset too so
+    per-test request counts start fresh."""
+    with psycopg.connect(settings.database_url) as conn:
         conn.execute(f"truncate {_DOMAIN_TABLES} cascade")
+        conn.commit()
     limiter.reset()
     yield
