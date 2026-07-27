@@ -14,8 +14,10 @@ from typing import Any
 
 import psycopg
 from pgvector.psycopg import Vector
+from psycopg.types.json import Json
 
 from knowledge_desk.auth import role_at_least
+from knowledge_desk.config import settings
 from knowledge_desk.db import connect
 from knowledge_desk.errors import Conflict, Forbidden, NotFound
 
@@ -96,7 +98,82 @@ class TenantScope:
                 (group_id, user_id),
             )
 
+    def remove_group_member(self, group_id: str, user_id: str) -> None:
+        self.require_role("admin")
+        self.get_group(group_id)  # 404s if the group is not in this org
+        with connect(self.org_id) as conn:
+            conn.execute(
+                "delete from group_members where group_id = %s and user_id = %s",
+                (group_id, user_id),
+            )
+
+    def list_group_members(self, group_id: str) -> list[dict[str, Any]]:
+        self.get_group(group_id)
+        with connect(self.org_id) as conn:
+            return conn.execute(
+                "select u.id, u.email from group_members gm"
+                " join users u on u.id = gm.user_id"
+                " where gm.group_id = %s order by u.email",
+                (group_id,),
+            ).fetchall()
+
+    def delete_group(self, group_id: str) -> None:
+        self.require_role("admin")
+        with connect(self.org_id) as conn:
+            row = conn.execute(
+                "delete from groups where id = %s and org_id = %s returning id",
+                (group_id, self.org_id),
+            ).fetchone()
+        if row is None:
+            raise NotFound(f"group not found: {group_id}")
+
     # --- members ----------------------------------------------------------
+
+    def _owner_count(self, conn: psycopg.Connection) -> int:
+        return conn.execute(
+            "select count(*) as n from memberships where org_id = %s and role = 'owner'",
+            (self.org_id,),
+        ).fetchone()["n"]
+
+    def set_member_role(self, user_id: str, role: str) -> None:
+        """Change a member's role. You cannot change your own role (avoids
+        self-lockout), and the org must always keep at least one owner."""
+        self.require_role("admin")
+        if user_id == self.ctx.user_id:
+            raise Forbidden("you cannot change your own role")
+        with connect(self.org_id) as conn:
+            target = conn.execute(
+                "select role from memberships where user_id = %s and org_id = %s",
+                (user_id, self.org_id),
+            ).fetchone()
+            if target is None:
+                raise NotFound(f"member not found: {user_id}")
+            if target["role"] == "owner" and role != "owner" and self._owner_count(conn) == 1:
+                raise Forbidden("the org must keep at least one owner")
+            conn.execute(
+                "update memberships set role = %s where user_id = %s and org_id = %s",
+                (role, user_id, self.org_id),
+            )
+
+    def remove_member(self, user_id: str) -> None:
+        """Remove a member from the org. You cannot remove yourself, and you
+        cannot remove the last owner."""
+        self.require_role("admin")
+        if user_id == self.ctx.user_id:
+            raise Forbidden("you cannot remove yourself")
+        with connect(self.org_id) as conn:
+            target = conn.execute(
+                "select role from memberships where user_id = %s and org_id = %s",
+                (user_id, self.org_id),
+            ).fetchone()
+            if target is None:
+                raise NotFound(f"member not found: {user_id}")
+            if target["role"] == "owner" and self._owner_count(conn) == 1:
+                raise Forbidden("cannot remove the last owner")
+            conn.execute(
+                "delete from memberships where user_id = %s and org_id = %s",
+                (user_id, self.org_id),
+            )
 
     # --- documents --------------------------------------------------------
 
@@ -118,6 +195,17 @@ class TenantScope:
             row = conn.execute(
                 "delete from documents where id = %s and org_id = %s returning id",
                 (document_id, self.org_id),
+            ).fetchone()
+        if row is None:
+            raise NotFound(f"document not found: {document_id}")
+
+    def update_document_acl(self, document_id: str, acl: list[str]) -> None:
+        self.require_role("admin")
+        with connect(self.org_id) as conn:
+            row = conn.execute(
+                "update documents set acl = %s, updated_at = now()"
+                " where id = %s and org_id = %s returning id",
+                (Json(acl), document_id, self.org_id),
             ).fetchone()
         if row is None:
             raise NotFound(f"document not found: {document_id}")
@@ -230,6 +318,37 @@ class TenantScope:
                 " where a.org_id = %s order by a.created_at desc limit %s",
                 (self.org_id, limit),
             ).fetchall()
+
+    def top_queries(self, limit: int = 5) -> list[dict[str, Any]]:
+        with connect(self.org_id) as conn:
+            return conn.execute(
+                "select question, count(*) as count from answers"
+                " where org_id = %s and created_at >= date_trunc('month', now())"
+                " group by question order by count desc, question limit %s",
+                (self.org_id, limit),
+            ).fetchall()
+
+    def usage_summary(self) -> dict[str, Any]:
+        """Everything the usage dashboard needs: volume and cost against their
+        caps, storage against its cap, and the month's top questions."""
+        storage = self.storage_usage()
+        return {
+            "questions": {
+                "used": self.questions_this_month(),
+                "cap": settings.monthly_question_cap,
+            },
+            "spend": {
+                "used_usd": round(self.spend_last_24h(), 6),
+                "budget_usd": settings.daily_budget_usd,
+            },
+            "storage": {
+                "docs": storage["docs"],
+                "doc_cap": settings.org_doc_cap,
+                "bytes": storage["bytes"],
+                "byte_cap": settings.org_storage_bytes_cap,
+            },
+            "top_queries": self.top_queries(),
+        }
 
     def add_feedback(self, answer_id: str, rating: str, note: str | None) -> None:
         with connect(self.org_id) as conn:
