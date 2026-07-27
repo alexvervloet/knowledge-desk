@@ -11,6 +11,7 @@ import json
 from typing import Annotated
 
 from fastapi import Depends, FastAPI, HTTPException, Response, status
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
@@ -27,6 +28,12 @@ from knowledge_desk.tenancy import AuthContext, TenantScope
 
 app = FastAPI(title="Knowledge Desk", version=__version__)
 register_error_handlers(app)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=settings.cors_origins,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 _KNOWN_COLLECTIONS = {"demo"}
 

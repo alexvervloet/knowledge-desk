@@ -27,6 +27,10 @@ class Settings(BaseSettings):
     # How long a login session stays valid.
     session_ttl_hours: int = 720
 
+    # Frontend dev server origins allowed to call the API cross-origin. In prod
+    # the UI is served same-origin (Phase 8), so this only matters for `npm run dev`.
+    cors_origins: list[str] = ["http://localhost:5173"]
+
     # Ingestion.
     embed_model: str = "voyage-3"
     chunk_size: int = 1000
