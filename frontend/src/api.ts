@@ -51,7 +51,7 @@ export type Group = { id: string; name: string; created_at: string };
 export type GroupMember = { id: string; email: string };
 export type DocumentRow = {
   id: string; path: string; source: string; status: string;
-  content_hash: string; pii_types: string[]; updated_at: string; chunk_count: number;
+  content_hash: string; pii_types: string[]; acl: string[]; updated_at: string; chunk_count: number;
 };
 export type AuditRow = { action: string; detail: Record<string, unknown>; created_at: string; actor: string | null };
 export type Usage = {
