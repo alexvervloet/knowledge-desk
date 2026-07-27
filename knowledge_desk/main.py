@@ -131,6 +131,29 @@ def list_members(scope: Annotated[TenantScope, Depends(current_scope)]) -> list[
     return scope.list_members()
 
 
+class SetRoleRequest(BaseModel):
+    role: str = Role
+
+
+@app.patch("/members/{user_id}")
+def set_member_role(
+    user_id: str, req: SetRoleRequest, scope: Annotated[TenantScope, Depends(current_scope)]
+) -> dict:
+    scope.set_member_role(user_id, req.role)
+    audit.log(scope.org_id, scope.ctx.user_id, "member.role_changed",
+              {"user_id": user_id, "role": req.role})
+    return {"user_id": user_id, "role": req.role}
+
+
+@app.delete("/members/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
+def remove_member(
+    user_id: str, scope: Annotated[TenantScope, Depends(current_scope)]
+) -> Response:
+    scope.remove_member(user_id)
+    audit.log(scope.org_id, scope.ctx.user_id, "member.removed", {"user_id": user_id})
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
 # --- groups ---------------------------------------------------------------
 
 
@@ -161,6 +184,21 @@ def get_group(
     return scope.get_group(group_id)
 
 
+@app.delete("/groups/{group_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_group(
+    group_id: str, scope: Annotated[TenantScope, Depends(current_scope)]
+) -> Response:
+    scope.delete_group(group_id)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@app.get("/groups/{group_id}/members")
+def list_group_members(
+    group_id: str, scope: Annotated[TenantScope, Depends(current_scope)]
+) -> list[dict]:
+    return scope.list_group_members(group_id)
+
+
 @app.post("/groups/{group_id}/members", status_code=status.HTTP_201_CREATED)
 def add_group_member(
     group_id: str,
@@ -170,6 +208,14 @@ def add_group_member(
     user_id = accounts.find_user_id(req.email)
     scope.add_group_member(group_id, user_id)
     return {"group_id": group_id, "user_id": user_id}
+
+
+@app.delete("/groups/{group_id}/members/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
+def remove_group_member(
+    group_id: str, user_id: str, scope: Annotated[TenantScope, Depends(current_scope)]
+) -> Response:
+    scope.remove_group_member(group_id, user_id)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 # --- sources and documents ------------------------------------------------
@@ -224,6 +270,22 @@ def delete_document(
     scope.delete_document(document_id)
     audit.log(scope.org_id, scope.ctx.user_id, "document.deleted", {"document_id": document_id})
     return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+class UpdateAclRequest(BaseModel):
+    acl: list[str] = Field(max_length=200)
+
+
+@app.patch("/documents/{document_id}/acl")
+def update_document_acl(
+    document_id: str,
+    req: UpdateAclRequest,
+    scope: Annotated[TenantScope, Depends(current_scope)],
+) -> dict:
+    scope.update_document_acl(document_id, req.acl)
+    audit.log(scope.org_id, scope.ctx.user_id, "document.acl_changed",
+              {"document_id": document_id})
+    return {"document_id": document_id, "acl": req.acl}
 
 
 # --- tenant retention -----------------------------------------------------
@@ -303,6 +365,13 @@ def audit_log(scope: Annotated[TenantScope, Depends(current_scope)]) -> list[dic
     """Recent audit events for the caller's org. Admin only."""
     scope.require_role("admin")
     return scope.list_audit()
+
+
+@app.get("/usage")
+def usage(scope: Annotated[TenantScope, Depends(current_scope)]) -> dict:
+    """Org usage against its caps, for the admin dashboard. Admin only."""
+    scope.require_role("admin")
+    return scope.usage_summary()
 
 
 class FeedbackRequest(BaseModel):
