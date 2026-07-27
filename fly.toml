@@ -1,0 +1,40 @@
+# Fly.io config. Two process groups from one image: a web process (API + built
+# UI) and a worker process (the background embedder). Migrations run once per
+# deploy via the release command, so the processes never race to migrate.
+#
+# Deploying is a [Alex] step (account + cost). See the runbook in PLAN.md.
+
+app = "knowledge-desk"
+primary_region = "iad"
+
+[build]
+
+[deploy]
+  release_command = "python -m knowledge_desk.migrate"
+
+[env]
+  SERVE_STATIC = "1"
+  # DATABASE_URL (owner) and APP_DATABASE_URL (least-privilege app role) are set
+  # as secrets, never committed. Provider/observability keys are secrets too.
+
+[processes]
+  app = "uvicorn knowledge_desk.main:app --host 0.0.0.0 --port 8000"
+  worker = "python -m knowledge_desk.worker"
+
+[http_service]
+  internal_port = 8000
+  force_https = true
+  auto_stop_machines = "stop"
+  auto_start_machines = true
+  min_machines_running = 0
+  processes = ["app"]
+
+  [[http_service.checks]]
+    interval = "15s"
+    timeout = "3s"
+    method = "GET"
+    path = "/healthz"
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "512mb"
