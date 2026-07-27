@@ -24,16 +24,37 @@ fallback, so it works and tests green with no API keys.
 
 ## Run it locally
 
+For development, run the database in Docker and the app on the host:
+
 ```bash
-docker compose up -d                      # Postgres + pgvector on :5436
+docker compose up -d db                   # Postgres + pgvector on :5436
 python -m knowledge_desk.migrate          # creates schema, RLS, and the app role
 python check_setup.py                     # preflight
+python -m knowledge_desk.seed             # two demo orgs (optional)
 
 uvicorn knowledge_desk.main:app --reload  # API on :8000
 python -m knowledge_desk.worker           # background embedder (separate shell)
 
 cd frontend && npm install && npm run dev # UI on :5173 (set VITE_API_BASE=http://localhost:8000)
 ```
+
+Or run the whole stack (API + built UI + worker + db) in containers:
+
+```bash
+docker compose up --build                 # app on http://localhost:8000
+```
+
+### Demo logins
+
+After `python -m knowledge_desk.seed` (password `demo-password-123`):
+
+| org | email |
+|---|---|
+| acme | owner@acme.test |
+| globex | owner@globex.test |
+
+Each org's documents are non-overlapping, so a question in one org can never
+retrieve the other's content. Public URL: pending deploy.
 
 Tenant isolation is enforced in three layers: the data layer's `org_id` filter,
 the ACL-aware candidate fetch in retrieval, and Postgres row-level security

@@ -237,15 +237,46 @@ verified against a live uvicorn (signup, admin usage, CORS preflight).
 
 ## Phase 8: containerize and deploy (done when a seeded multi-tenant demo is public)
 
-- [ ] Multi-stage Dockerfile serves UI plus API; worker runs as a second process
-- [ ] `docker compose up --build` runs api, worker, and pgvector end to end in CI
-- [ ] Seed script creates two demo orgs with distinct, non-overlapping documents
-      so a reviewer can log into each and see isolation and access control live
-- [ ] Deploy (fly.io, managed Postgres). Public URL with two demo logins in README
-- [ ] First-week table:
+- [x] Multi-stage Dockerfile: node builds the SPA, the python image serves it
+      same-origin with the API (`SERVE_STATIC=1`). The worker runs from the same
+      image with a different command. Migrations are self-contained (a `0000`
+      migration creates the pgvector extension) so the container needs no preflight.
+- [x] `docker compose up --build` runs api, worker, and pgvector end to end, and a
+      CI `compose` job proves it on a clean runner: build, wait for healthy, seed,
+      signup, ask, and confirm the SPA is served. Green.
+- [x] Seed script (`python -m knowledge_desk.seed`, idempotent) creates two demo
+      orgs (`acme`, `globex`) with distinct, non-overlapping documents, so a
+      reviewer can log into each and see that neither can retrieve the other's.
+- [ ] Deploy (fly.io, managed Postgres): `fly.toml` committed (web + worker
+      processes, release-command migrations, always-on off, ~$3-4/month). Runbook
+      below; the deploy itself is a [Alex] step (account + cost).
+- [ ] First-week table (fill after deploy):
 
 | week of | orgs | questions | est. spend ($) | host bill ($) |
 |---|---|---|---|---|
+
+### Deploy runbook (fly.io)
+
+Steps marked [Alex] create accounts or cost money.
+
+- [ ] [Alex] `fly launch --no-deploy` (reuse the committed `fly.toml`)
+- [ ] [Alex] Managed Postgres: `fly postgres create` then `fly postgres attach`
+      (sets `DATABASE_URL`). The attached role is not a superuser, so FORCE RLS
+      applies to it.
+- [ ] [Alex] Create the app role and set `APP_DATABASE_URL` secret to the `kd_app`
+      DSN on the same host (least privilege). The `0007` migration creates `kd_app`;
+      alternatively point `APP_DATABASE_URL` at the attached role (RLS still holds
+      via FORCE, but without the privilege separation).
+- [ ] [Alex] Optional real mode: set `ANTHROPIC_API_KEY` / `VOYAGE_API_KEY` secrets
+      from the Keychain via `secrun`. Keyless runs in the loud mock fallback.
+- [ ] [Alex] `fly deploy` (release command runs migrations once), then
+      `fly ssh console -C "python -m knowledge_desk.seed"` for the demo orgs
+- [ ] [Alex] Put the public URL and the two demo logins in the README
+
+**Phase 8 complete except the [Alex] deploy.** The image, the full compose stack,
+and the seed are all proven green in CI on a clean runner; only the fly.io launch
+(which needs an account and costs money) is left, and its files and runbook are
+ready.
 
 ## Phase 9: observability (done when the dashboard shows per-tenant traffic)
 
@@ -282,6 +313,17 @@ best part of the write-up)
   `docker start knowledge-desk-pg` brings it back with the volume intact. CI is
   unaffected (it starts its own). Same family as askrepo-live's Docker sleep
   quirk. Not a code issue; just restart the container after the laptop sleeps.
+- **2026-07-27**: the container runs only migrations, not `check_setup`, so the
+  pgvector extension was never created and migration 0002's `vector(1024)` column
+  failed with "type vector does not exist" (the api container exited 1 on boot).
+  Fix: a `0000_extensions.sql` migration creates the extension, making migrations
+  self-contained. Lesson: anything the app needs at runtime must be a migration,
+  not a preflight-only step. (Adding api/worker to compose also meant the plain
+  `docker compose up -d` in the test job started them too; scoped it to `db`.)
+- **2026-07-27**: local Docker could not pull `node:20-slim` (registry pulls hang,
+  the same machine-level flakiness as askrepo-live's gotcha log), so the image was
+  never built on this laptop. CI is the fresh-machine proof instead, and a stronger
+  one: the `compose` job builds from scratch and runs the full stack every push.
 - **2026-07-25**: a plain Python list of floats binds as `double precision[]`,
   which has no `<=>` operator against `vector`, so a similarity query fails with
   `UndefinedFunction` even though inserting the same list into a `vector` column
