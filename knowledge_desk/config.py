@@ -31,6 +31,11 @@ class Settings(BaseSettings):
     # the UI is served same-origin (Phase 8), so this only matters for `npm run dev`.
     cors_origins: list[str] = ["http://localhost:5173"]
 
+    # Serve the built SPA from the API (same-origin) in the container. Off by
+    # default so dev and tests do not depend on a built frontend.
+    serve_static: bool = False
+    static_dir: str = "frontend/dist"
+
     # Ingestion.
     embed_model: str = "voyage-3"
     chunk_size: int = 1000

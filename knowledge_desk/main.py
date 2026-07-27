@@ -393,3 +393,18 @@ def feedback(
 ) -> dict:
     scope.add_feedback(req.answer_id, req.rating, req.note)
     return {"answer_id": req.answer_id, "rating": req.rating}
+
+
+# --- static SPA (production) ----------------------------------------------
+#
+# Mounted last so it never shadows an API route: unmatched paths fall through to
+# the built frontend. Off unless SERVE_STATIC=1 and the build exists, so dev and
+# tests do not depend on a compiled UI.
+if settings.serve_static:
+    from pathlib import Path
+
+    from fastapi.staticfiles import StaticFiles
+
+    _static = Path(settings.static_dir)
+    if _static.is_dir():
+        app.mount("/", StaticFiles(directory=_static, html=True), name="spa")
