@@ -86,7 +86,7 @@ jobs:
           docker compose exec -T api python -m knowledge_desk.seed
           token=$(curl -fsS -X POST localhost:8000/auth/signup \
             -H 'Content-Type: application/json' \
-            -d '{"org_slug":"ci","org_name":"CI","email":"ci@ci.test","password":"pw-supersecret"}' \
+            -d '{"org_slug":"ci-demo","org_name":"CI","email":"ci@ci.test","password":"pw-supersecret"}' \
             | python3 -c "import sys,json; print(json.load(sys.stdin)['token'])")
           curl -fsS -X POST localhost:8000/ask \
             -H "Authorization: Bearer $token" -H 'Content-Type: application/json' \
