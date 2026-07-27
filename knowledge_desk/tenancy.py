@@ -181,7 +181,7 @@ class TenantScope:
         with connect(self.org_id) as conn:
             return conn.execute(
                 "select d.id, d.path, d.source, d.status, d.content_hash,"
-                " d.pii_types, d.updated_at,"
+                " d.pii_types, d.acl, d.updated_at,"
                 " (select count(*) from chunks c where c.document_id = d.id)"
                 " as chunk_count"
                 " from documents d where d.org_id = %s order by d.path",
