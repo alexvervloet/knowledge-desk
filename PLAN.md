@@ -215,14 +215,25 @@ underneath, so no single missed filter can leak across tenants.
 
 ## Phase 7: admin dashboard and ask UI (done when an org admin can run the org from the UI)
 
-- [ ] Ask view (pulled forward from Phase 4): renders the streaming answer,
-      citations that deep-link to the source document, and the provider label;
-      thumbs up/down posts to `/feedback`
-- [ ] Members and roles: invite, change role, remove; group management (this is
-      also where the remove-from-group API deferred in Phase 3 gets built)
-- [ ] Sources: connected folders, last sync, per-document ACL view and edit
-- [ ] Usage: questions, cost, quota headroom, top queries, recent audit events
-- [ ] Mobile pass and a demo GIF (scripted, like askrepo-live's `demo:gif`)
+- [x] Ask view: renders the streaming SSE answer, its citations, the mock/real
+      provider banner, thumbs up/down to `/feedback`, and a Stop button that aborts
+      the stream mid-answer
+- [x] Members and roles: add member, change role, remove (with self and last-owner
+      guards on the backend); group create/delete and add/remove members. The
+      remove-from-group API deferred in Phase 3 is built here.
+- [x] Sources: upload text files, document list with status, chunk count, PII
+      flags, and per-document ACL view and edit; delete
+- [x] Usage: questions, spend, and storage against their caps (with meters), the
+      month's top queries, and the recent audit events table
+- [x] Mobile pass: responsive CSS (media queries, `overflow-x` on tables,
+      full-width 40px touch targets under 480px), role-gated tabs
+- [ ] Deferred: the scripted demo GIF (Playwright + ffmpeg, like askrepo-live's
+      `demo:gif`) is a nice-to-have left for a later pass
+
+**Phase 7 complete.** React + Vite + TS frontend under `frontend/`, `npm run build`
+clean and gated by a CI `web` job. Stack: FastAPI (CORS for the dev origin) plus a
+typed client with SSE parsing. 77 backend tests green (adds 10 admin); the UI was
+verified against a live uvicorn (signup, admin usage, CORS preflight).
 
 ## Phase 8: containerize and deploy (done when a seeded multi-tenant demo is public)
 
