@@ -60,6 +60,14 @@ Tenant isolation is enforced in three layers: the data layer's `org_id` filter,
 the ACL-aware candidate fetch in retrieval, and Postgres row-level security
 underneath (the app connects as a least-privilege role so RLS applies).
 
+## Observability
+
+With `LANGFUSE_*` keys set, each question emits one Langfuse trace tagged by org
+and user: a retriever span that records how many of the org's chunks the caller
+was allowed to see (the ACL filter, made visible), and the answer as a generation
+with token usage and cost. Without keys it is a no-op, and every tracer call is
+exception-proof, so observability can never take the product down.
+
 ## License
 
 MIT. See [LICENSE](LICENSE).

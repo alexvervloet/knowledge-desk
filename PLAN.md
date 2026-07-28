@@ -280,10 +280,27 @@ ready.
 
 ## Phase 9: observability (done when the dashboard shows per-tenant traffic)
 
-- [ ] One Langfuse trace per question, tagged by org and user, with a retriever
-      span (how many candidates before and after the ACL filter) and the generation
-- [ ] A per-org view of volume, cost, and latency; note what the first week showed
-- [ ] Dashboard screenshot and link in README
+- [x] One Langfuse trace per question, tagged by org (metadata) and user (trace
+      user), with a retriever span that records `org_chunks` vs `allowed_chunks`
+      (the ACL filter made visible), and the answer as a generation carrying token
+      usage and cost. No-op without keys; every tracer call is exception-proof so
+      observability can never take the product down; explicit span objects, not
+      context managers, because the answer streams and interleaves.
+- [x] Verified without a live account: the no-op path is tested, and the active
+      path is proven against a fake client (spans, ACL counts, usage, trace io).
+- [ ] [Alex] Langfuse Cloud account; set `LANGFUSE_PUBLIC_KEY` / `LANGFUSE_SECRET_KEY`
+      / `LANGFUSE_HOST` as secrets (Keychain via `secrun`, like askrepo-live)
+- [ ] [Alex] Per-org dashboard of volume, cost, and latency; note the first week's
+      trend and put a screenshot and link in the README
+
+**Phase 9 complete except the [Alex] Langfuse account.** 80 tests green. The
+distinctive touch: the retriever span carries the org-total and caller-allowed
+chunk counts, so the permission filter that Phase 3 enforces is now visible per
+request in the trace, not just asserted in tests.
+
+The build is feature-complete: all ten phases are done in code and green in CI.
+What remains is external-account work (the fly deploy and the Langfuse account),
+both prepared and documented, both [Alex].
 
 ## Open decisions to revisit
 
