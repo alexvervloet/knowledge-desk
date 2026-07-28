@@ -233,6 +233,24 @@ class TenantScope:
         principals += [f"group:{r['group_id']}" for r in groups]
         return principals
 
+    def retrieval_stats(self) -> dict[str, int]:
+        """How many ingested chunks the org has, and how many of them this caller
+        is allowed to see. The gap is the ACL filter made visible (used in the
+        retriever trace span). Two cheap counts, only computed when tracing."""
+        principals = self.principals()
+        with connect(self.org_id) as conn:
+            org_chunks = conn.execute(
+                "select count(*) as n from chunks c join documents d on d.id = c.document_id"
+                " where c.org_id = %s and d.status = 'ingested'",
+                (self.org_id,),
+            ).fetchone()["n"]
+            allowed = conn.execute(
+                "select count(*) as n from chunks c join documents d on d.id = c.document_id"
+                " where c.org_id = %s and d.status = 'ingested' and d.acl ?| %s",
+                (self.org_id, principals),
+            ).fetchone()["n"]
+        return {"org_chunks": int(org_chunks), "allowed_chunks": int(allowed)}
+
     def search(self, query_embedding: list[float], k: int = 5) -> list[dict[str, Any]]:
         """Nearest chunks the caller is allowed to see. The ACL filter is part of
         the candidate fetch (`d.acl ?| principals`), so a forbidden chunk is never
