@@ -15,7 +15,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
-from knowledge_desk import __version__, accounts, assistant, audit, ingest, retrieval
+from knowledge_desk import __version__, accounts, assistant, audit, ingest, retrieval, tracing
 from knowledge_desk.config import settings
 from knowledge_desk.deps import (
     bearer_token,
@@ -28,6 +28,7 @@ from knowledge_desk.tenancy import AuthContext, TenantScope
 
 app = FastAPI(title="Knowledge Desk", version=__version__)
 register_error_handlers(app)
+tracing.init()  # enables Langfuse only if LANGFUSE_* keys are set; no-op otherwise
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origins,
