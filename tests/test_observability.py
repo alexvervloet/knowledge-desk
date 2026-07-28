@@ -3,10 +3,13 @@ request, and retrieval_stats exposes the ACL filter (org total vs what a caller
 may see) that the retriever trace span reports.
 """
 
+import contextlib
+
+import langfuse
 import pytest
 from fastapi.testclient import TestClient
 
-from knowledge_desk import accounts, ingest
+from knowledge_desk import accounts, ingest, tracing
 from knowledge_desk.main import app
 from knowledge_desk.tenancy import TenantScope
 from knowledge_desk.tracing import AskTracer
@@ -26,6 +29,69 @@ def test_tracer_is_inert_without_keys():
     t.token("hello ")
     t.done(1, 2, 0.0)
     t.finish()  # no raise
+
+
+class _FakeObs:
+    def __init__(self):
+        self.start_kwargs = {}
+        self.updates = []
+        self.children = []
+        self.ended = False
+        self.trace_io = None
+
+    def start_observation(self, **kw):
+        child = _FakeObs()
+        child.start_kwargs = kw
+        self.children.append(child)
+        return child
+
+    def update(self, **kw):
+        self.updates.append(kw)
+
+    def end(self):
+        self.ended = True
+
+    def set_trace_io(self, **kw):
+        self.trace_io = kw
+
+
+class _FakeClient:
+    def __init__(self):
+        self.root = None
+
+    def start_observation(self, **kw):
+        self.root = _FakeObs()
+        self.root.start_kwargs = kw
+        return self.root
+
+
+def test_tracer_records_spans_when_enabled(monkeypatch):
+    # Prove the active path calls the SDK correctly, without a real Langfuse.
+    @contextlib.contextmanager
+    def _noop_attrs(**_kw):
+        yield
+
+    monkeypatch.setattr(langfuse, "propagate_attributes", _noop_attrs)
+    fake = _FakeClient()
+    monkeypatch.setattr(tracing, "_client", fake)
+
+    t = AskTracer("what is x?", "org-1", "user-1", "e@x.test", "claude", "claude-opus-5")
+    assert t.active is True
+    t.sources([{"path": "a.txt"}], {"org_chunks": 5, "allowed_chunks": 2})
+    t.token("the answer ")
+    t.done(100, 20, 0.0012)
+    t.finish()
+
+    root = fake.root
+    assert root.start_kwargs["name"] == "ask"
+    assert root.start_kwargs["metadata"]["org_id"] == "org-1"
+    retrieval, generation = root.children  # retriever then generation
+    assert retrieval.ended and retrieval.updates[0]["output"]["acl"] == {"org_chunks": 5, "allowed_chunks": 2}
+    assert generation.start_kwargs["as_type"] == "generation"
+    assert generation.updates[0]["usage_details"] == {"input": 100, "output": 20}
+    assert generation.updates[0]["cost_details"] == {"total": 0.0012}
+    assert root.trace_io["output"] == "the answer "
+    assert root.ended
 
 
 def test_ask_still_streams_with_tracing_path():
