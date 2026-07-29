@@ -12,8 +12,10 @@ audit, and evals that gate merges. The RAG core is reused from earlier work.
 
 ## Status
 
-Early scaffolding. See [PLAN.md](PLAN.md) for the phased build and the
-definition of done for each phase.
+Feature complete. See [PLAN.md](PLAN.md) for the phased build and the definition
+of done for each phase, [WALKTHROUGH.md](WALKTHROUGH.md) for a narrated trip
+through the app end to end (branch points, gotchas, and what it is and is not
+good at), and [LESSONS.md](LESSONS.md) for what the build taught.
 
 ## Stack
 
