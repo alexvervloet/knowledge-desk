@@ -17,6 +17,61 @@ of done for each phase, [WALKTHROUGH.md](WALKTHROUGH.md) for a narrated trip
 through the app end to end (branch points, gotchas, and what it is and is not
 good at), and [LESSONS.md](LESSONS.md) for what the build taught.
 
+## Architecture
+
+Ingestion is asynchronous, so embedding never blocks a request. Asking is
+synchronous and streams. The interesting property is that a question can only
+ever reach documents the asker is allowed to see, and that is enforced three
+independent times (marked below), so no single missed filter leaks data.
+
+```mermaid
+flowchart TB
+    subgraph client [Browser]
+        UI[React SPA<br/>ask, sources, members, usage]
+    end
+
+    subgraph api [FastAPI]
+        AUTH[Session auth<br/>bearer token, role gate]
+        SCOPE["TenantScope<br/>🛡️ 1. stamps org_id on every query"]
+        ASK[Assistant<br/>SSE stream]
+        RL[Rate limit + budget cap]
+    end
+
+    subgraph workers [Background]
+        Q[(jobs table<br/>skip-locked, retry, dead-letter)]
+        W[Worker<br/>chunk, embed, store]
+    end
+
+    subgraph data [Postgres + pgvector]
+        DB["orgs, users, documents, chunks<br/>🛡️ 3. row-level security<br/>least-privilege role"]
+    end
+
+    subgraph ext [External]
+        VO[Voyage embeddings]
+        CL[Claude]
+        LF[Langfuse traces]
+    end
+
+    UI -->|upload| AUTH
+    UI -->|ask| AUTH
+    AUTH --> SCOPE
+    SCOPE --> RL
+    RL --> ASK
+    SCOPE -->|enqueue| Q
+    Q --> W
+    W --> VO
+    W --> DB
+    ASK -->|"🛡️ 2. ACL filter inside<br/>the candidate fetch"| DB
+    ASK --> CL
+    ASK -.->|org and user tagged| LF
+    ASK -->|"meta, sources, tokens, done"| UI
+```
+
+The three shields are the whole point: the data layer filters by `org_id`, the
+retrieval query filters by the caller's ACL in the same SQL that ranks
+candidates (so forbidden rows are never scored), and row-level security denies
+by default underneath both. A bug in any one of them is not a data leak.
+
 ## Stack
 
 FastAPI, Postgres with pgvector, a Postgres-backed job queue and worker, React
