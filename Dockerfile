@@ -10,7 +10,7 @@ COPY frontend/ ./
 RUN npm run build
 
 # --- stage 2: python runtime ---------------------------------------------
-FROM python:3.13-slim AS app
+FROM python:3.14-slim AS app
 WORKDIR /app
 ENV PYTHONUNBUFFERED=1 \
     PIP_NO_CACHE_DIR=1 \
