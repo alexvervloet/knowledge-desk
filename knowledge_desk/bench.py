@@ -88,6 +88,13 @@ def _time_search(scope: TenantScope, queries: int, rng: random.Random) -> list[f
 
 
 def main() -> int:
+    try:
+        return _main()
+    finally:
+        close_pool()  # otherwise pool threads outlive an error path and warn
+
+
+def _main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--chunks", type=int, default=100_000)
     ap.add_argument("--queries", type=int, default=20)
@@ -137,7 +144,6 @@ def main() -> int:
         # The query vector literal is 1024 floats wide; truncate so the plan reads.
         line = row["QUERY PLAN"]
         print("   ", line[:120] + (" ..." if len(line) > 120 else ""))
-    close_pool()
     return 0
 
 
