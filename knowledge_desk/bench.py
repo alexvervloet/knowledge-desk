@@ -36,7 +36,7 @@ def _rand_vec(rng: random.Random) -> list[float]:
     return [rng.uniform(-1.0, 1.0) for _ in range(EMBED_DIM)]
 
 
-def _seed(chunks: int, seed: int = 7) -> tuple[str, str]:
+def _seed(chunks: int, with_index: bool = False, seed: int = 7) -> tuple[str, str]:
     rng = random.Random(seed)
     with psycopg.connect(settings.database_url) as conn:
         conn.execute(f"truncate {_ALL_TABLES} cascade")
@@ -58,20 +58,35 @@ def _seed(chunks: int, seed: int = 7) -> tuple[str, str]:
             ).fetchone()
             doc_ids.append(str(row["id"]))
 
-    # Bulk load as the owner: Postgres refuses COPY FROM on a table with row-level
-    # security ("COPY FROM not supported with row-level security"), so the
-    # least-privilege app role cannot bulk load at all. Real bulk imports have the
-    # same constraint and belong on an admin connection like this one.
+    # Bulk load as the owner for two reasons. Postgres refuses COPY FROM on a
+    # table with row-level security ("COPY FROM not supported with row-level
+    # security"), so the least-privilege app role cannot bulk load at all. And
+    # the vector index is dropped for the load and rebuilt after: inserting into
+    # a live HNSW graph costs a graph insertion per row, which measured slower
+    # than building the whole index once (100k rows was still copying after 12
+    # minutes, versus about 30 seconds unindexed plus a 6 minute rebuild). This
+    # is the standard bulk-import shape, not a benchmark-only trick.
     t0 = time.perf_counter()
     with psycopg.connect(settings.database_url) as conn:
+        conn.execute("drop index if exists chunks_embedding_hnsw")
+        conn.commit()
         with conn.cursor().copy(
-            "copy chunks (org_id, document_id, ordinal, text, embedding) from stdin"
+            "copy chunks (org_id, document_id, ordinal, text, embedding, acl) from stdin"
         ) as copy:
             for i in range(chunks):
                 vec = "[" + ",".join(f"{v:.5f}" for v in _rand_vec(rng)) + "]"
                 copy.write_row((ctx.org_id, doc_ids[i // per_doc], i % per_doc,
-                                f"synthetic chunk {i}", vec))
+                                f"synthetic chunk {i}", vec, '["public-to-org"]'))
         conn.commit()
+        load = time.perf_counter() - t0
+        print(f"  copied {chunks} chunks in {load:.1f}s (no vector index)")
+
+        if with_index:
+            t1 = time.perf_counter()
+            conn.execute("create index chunks_embedding_hnsw"
+                         " on chunks using hnsw (embedding vector_cosine_ops)")
+            conn.commit()
+            print(f"  built hnsw index in {time.perf_counter() - t1:.1f}s")
     load = time.perf_counter() - t0
     print(f"  seeded {chunks} chunks in {load:.1f}s")
     return ctx.org_id, ctx.user_id
@@ -99,13 +114,15 @@ def _main() -> int:
     ap.add_argument("--chunks", type=int, default=100_000)
     ap.add_argument("--queries", type=int, default=20)
     ap.add_argument("--no-seed", action="store_true", help="reuse the existing bench org")
+    ap.add_argument("--with-index", action="store_true",
+                    help="build the HNSW index after loading, to A/B it against the default")
     args = ap.parse_args()
 
     if args.no_seed:
         ctx = accounts.authenticate("o@bench.test", "pw-supersecret", "bench")
         org_id, user_id = ctx.org_id, ctx.user_id
     else:
-        org_id, user_id = _seed(args.chunks)
+        org_id, user_id = _seed(args.chunks, with_index=args.with_index)
 
     ctx = accounts.authenticate("o@bench.test", "pw-supersecret", "bench")
     scope = TenantScope(ctx)
