@@ -16,20 +16,20 @@ default behavior; committing in the middle of a block would drop the context.
 
 from __future__ import annotations
 
+from collections.abc import Iterator
 from contextlib import contextmanager
-from typing import Iterator
 
 import psycopg
 from pgvector.psycopg import register_vector
-from psycopg.rows import dict_row
+from psycopg.rows import DictRow, dict_row
 from psycopg_pool import ConnectionPool
 
 from knowledge_desk.config import settings
 
-_pool: ConnectionPool | None = None
+_pool: ConnectionPool[psycopg.Connection[DictRow]] | None = None
 
 
-def _configure(conn: psycopg.Connection) -> None:
+def _configure(conn: psycopg.Connection[DictRow]) -> None:
     """Run once per physical connection, not per checkout."""
     register_vector(conn)
     # Iterative scan makes the HNSW index safe under our ACL filter. Without it
@@ -44,7 +44,7 @@ def _configure(conn: psycopg.Connection) -> None:
     conn.commit()
 
 
-def get_pool() -> ConnectionPool:
+def get_pool() -> ConnectionPool[psycopg.Connection[DictRow]]:
     global _pool
     if _pool is None:
         _pool = ConnectionPool(
@@ -59,6 +59,19 @@ def get_pool() -> ConnectionPool:
     return _pool
 
 
+def require_row(row: DictRow | None) -> DictRow:
+    """Unwrap a query that is guaranteed to produce a row.
+
+    An aggregate, or an INSERT with RETURNING, always yields exactly one row, so
+    None means the query or the schema changed underneath us. Failing loudly here
+    beats a TypeError three frames away, and it lets the type checker see that
+    the caller is not indexing an Optional.
+    """
+    if row is None:
+        raise RuntimeError("query returned no row where one was guaranteed")
+    return row
+
+
 def close_pool() -> None:
     global _pool
     if _pool is not None:
@@ -67,7 +80,7 @@ def close_pool() -> None:
 
 
 @contextmanager
-def connect(org_id: str | None = None) -> Iterator[psycopg.Connection]:
+def connect(org_id: str | None = None) -> Iterator[psycopg.Connection[DictRow]]:
     """Borrow a pooled connection. Commits on clean exit, rolls back on error.
 
     When `org_id` is given it is set as the transaction-scoped `app.current_org`
