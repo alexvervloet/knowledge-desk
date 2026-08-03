@@ -21,3 +21,39 @@ testpaths = ["tests"]
 markers = [
     "eval: merge-gating evals (permission leak, grounded answer)",
 ]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = [
+    "E", "W",   # pycodestyle
+    "F",        # pyflakes
+    "I",        # import sorting
+    "UP",       # pyupgrade
+    "B",        # bugbear
+    "SIM",      # simplify
+    "C4",       # comprehensions
+]
+ignore = [
+    "E501",  # line length is formatter's job, and SQL strings read better long
+    "B008",  # FastAPI's Depends() in defaults is the framework's idiom
+]
+
+[tool.ruff.lint.per-file-ignores]
+# Tests and evals reach into private helpers on purpose to assert on internals.
+"tests/*" = ["E402"]
+"evals/*" = ["E402"]
+
+[tool.mypy]
+# No python_version pin: it must match the interpreter in use, because a lower
+# setting makes mypy reject dependency stubs that use newer syntax (numpy's
+# stubs use 3.12 type statements).
+files = ["knowledge_desk"]
+ignore_missing_imports = true
+# Pragmatic settings: this codebase was not written mypy-first, so the goal is
+# catching real mistakes (bad attribute, wrong arity) rather than full coverage.
+check_untyped_defs = true
+warn_redundant_casts = true
+warn_unused_ignores = true
