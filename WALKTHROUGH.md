@@ -245,12 +245,28 @@ is a security incident.
 - **As a search engine for questions your corpus cannot answer.** No relevance
   threshold means confident-looking citations of unrelated documents. Fix this
   before showing it to anyone if that matters.
-- **At very large scale, as configured.** Retrieval is an exact scan with an ACL
-  filter, which is correct and fast for thousands to low tens of thousands of
-  chunks. There is no ANN index yet, so at millions of chunks you would want
-  HNSW, and combining an ANN index with a per-user ACL filter is genuinely
-  tricky: the index does not know about permissions, so you either over-fetch and
-  filter, or partition. Plan for that before you promise it.
+- **At very large scale, as configured, and this one was measured.** Retrieval is
+  an exact scan with an ACL filter. At 100k chunks that is p50 569ms and p95
+  2272ms on a laptop, which is fine for a tenant with thousands of chunks and not
+  fine for millions. The obvious fix does not work here: adding an HNSW index
+  changed the p50 by six milliseconds because **row-level security stops the
+  planner from using it**. The identical query run as a role that bypasses RLS
+  does use the index, at p50 367ms. The index also took bulk loading from 28
+  seconds to 355 seconds, so under RLS it is pure cost, and it was removed again
+  (migrations 0010 and 0011 tell that story).
+
+  If you outgrow the scan, the escape hatch is a deliberate security tradeoff,
+  not a tuning knob. Drop the RLS policy on `chunks` and recreate the HNSW index:
+
+  ```sql
+  drop policy org_isolation on chunks;
+  create index chunks_embedding_hnsw on chunks using hnsw (embedding vector_cosine_ops);
+  ```
+
+  Isolation then rests on two layers instead of three (the data layer's `org_id`
+  stamp and the ACL filter inside the candidate fetch), which is the same posture
+  most multi-tenant RAG systems ship with. Do it knowingly, and keep the
+  permission-leak eval in CI, because it becomes your last automated check.
 - **On non-text documents.** No PDF, DOCX, image, or OCR handling. Everything is
   UTF-8 text, and binary files fail at the database rather than being skipped.
 - **For fast-changing documents.** Resync is cheap for unchanged files, but a
