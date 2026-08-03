@@ -32,6 +32,16 @@ _pool: ConnectionPool | None = None
 def _configure(conn: psycopg.Connection) -> None:
     """Run once per physical connection, not per checkout."""
     register_vector(conn)
+    # Iterative scan makes the HNSW index safe under our ACL filter. Without it
+    # the index returns k candidates, the permission filter removes most of them,
+    # and the caller silently gets fewer results than they asked for. Relaxed
+    # order lets pgvector re-probe until enough rows survive the filter.
+    #
+    # Session-scoped on purpose, unlike the tenant GUC: this setting is identical
+    # for every tenant, so a pooled connection carrying it between requests is
+    # correct rather than a leak.
+    conn.execute("set hnsw.iterative_scan = relaxed_order")
+    conn.commit()
 
 
 def get_pool() -> ConnectionPool:
