@@ -110,7 +110,7 @@ def process_ingest_document(org_id: str, payload: dict[str, Any]) -> None:
     document_id = payload["document_id"]
     with connect(org_id) as conn:
         doc = conn.execute(
-            "select id, content, status from documents"
+            "select id, content, status, acl from documents"
             " where id = %s and org_id = %s",
             (document_id, org_id),
         ).fetchone()
@@ -123,10 +123,13 @@ def process_ingest_document(org_id: str, payload: dict[str, Any]) -> None:
     with connect(org_id) as conn:
         conn.execute("delete from chunks where document_id = %s", (document_id,))
         for ordinal, (text, embedding) in enumerate(zip(texts, embeddings)):
+            # acl is denormalized from the parent document so that access-scoped
+            # vector search can filter and order on the same relation (see
+            # migration 0010). update_document_acl keeps the copies in sync.
             conn.execute(
-                "insert into chunks(org_id, document_id, ordinal, text, embedding)"
-                " values (%s, %s, %s, %s, %s)",
-                (org_id, document_id, ordinal, text, embedding),
+                "insert into chunks(org_id, document_id, ordinal, text, embedding, acl)"
+                " values (%s, %s, %s, %s, %s, %s)",
+                (org_id, document_id, ordinal, text, embedding, Json(doc["acl"])),
             )
         conn.execute(
             "update documents set status = 'ingested', updated_at = now() where id = %s",

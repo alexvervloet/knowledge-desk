@@ -207,8 +207,15 @@ class TenantScope:
                 " where id = %s and org_id = %s returning id",
                 (Json(acl), document_id, self.org_id),
             ).fetchone()
-        if row is None:
-            raise NotFound(f"document not found: {document_id}")
+            if row is None:
+                raise NotFound(f"document not found: {document_id}")
+            # Chunks carry a denormalized copy so vector search can filter and
+            # order on one relation; both writes share this transaction so an
+            # ACL change can never be half applied.
+            conn.execute(
+                "update chunks set acl = %s where document_id = %s and org_id = %s",
+                (Json(acl), document_id, self.org_id),
+            )
 
     def export(self) -> dict[str, Any]:
         """A portable snapshot of the org's members and documents (metadata, not
@@ -246,7 +253,7 @@ class TenantScope:
             ).fetchone()["n"]
             allowed = conn.execute(
                 "select count(*) as n from chunks c join documents d on d.id = c.document_id"
-                " where c.org_id = %s and d.status = 'ingested' and d.acl ?| %s",
+                " where c.org_id = %s and d.status = 'ingested' and c.acl ?| %s",
                 (self.org_id, principals),
             ).fetchone()["n"]
         return {"org_chunks": int(org_chunks), "allowed_chunks": int(allowed)}
@@ -260,12 +267,16 @@ class TenantScope:
         principals = self.principals()
         vec = Vector(query_embedding)  # binds as `vector`, not double precision[]
         with connect(self.org_id) as conn:
+            # The ACL predicate reads c.acl, not d.acl. Filtering on the joined
+            # documents table forces the planner to abandon the HNSW index and
+            # sort the whole corpus; keeping the filter on the same relation as
+            # the vector keeps the index in play. See migration 0010.
             return conn.execute(
                 "select c.document_id, c.ordinal, c.text, d.path,"
                 " (c.embedding <=> %s) as distance"
                 " from chunks c join documents d on d.id = c.document_id"
                 " where c.org_id = %s and d.status = 'ingested'"
-                " and d.acl ?| %s"
+                " and c.acl ?| %s"
                 " order by c.embedding <=> %s limit %s",
                 (vec, self.org_id, principals, vec, k),
             ).fetchall()
