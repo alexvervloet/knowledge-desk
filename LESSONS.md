@@ -252,3 +252,35 @@ into what looks like instruction space.
 Takeaway: in a retrieval system, the documents are attacker-controlled input.
 Delimit them, say so in the system prompt, and defend the delimiter itself,
 because the first thing a serious injection tries is to close your fence.
+
+## 17. Your security layer can silently cost you your index
+
+Adding a vector index to a project that calls itself scalable felt like a
+formality. It turned into the most interesting measurement in the build. With
+100k chunks the unindexed search ran p50 569ms and p95 2272ms, scanning every
+row. Adding an HNSW index changed the p50 by six milliseconds, because the
+planner never used it. The same query, the same data, the same session settings,
+run as a role that bypasses row-level security, used the index and returned in
+367ms. RLS was quietly costing the index.
+
+The investigation had two false leads worth recording. First I assumed the ACL
+filter was the problem, and it partly was: filtering on the joined `documents`
+table defeats the index on its own, because the predicate that decides which
+rows survive lives on a different relation than the vector. Denormalizing the
+ACL onto `chunks` fixed that half. Then I assumed the remaining blocker was
+leakproofness, since pgvector's `cosine_distance` is not marked LEAKPROOF and
+non-leakproof functions cannot be pushed below a security barrier. Marking it
+LEAKPROOF changed nothing, so that tidy explanation was wrong too.
+
+What made the decision easy was the write side. Bulk loading 100k chunks took 28
+seconds with no index and 355 seconds to build the index afterward, and every
+ongoing insert pays a graph insertion. Under RLS the index was buying nothing on
+reads and costing an order of magnitude on writes, so it was added, measured, and
+removed again in the same session, with the numbers and the escape hatch written
+down.
+
+Takeaway: measure the index, do not assume it. Defense in depth is not free, and
+the honest version of "is it scalable" is a table with a row you did not want,
+plus a documented decision about which property you are choosing to keep. A
+negative result you can reproduce is worth more than a benchmark that flatters
+the design.
