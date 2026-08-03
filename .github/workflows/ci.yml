@@ -46,6 +46,29 @@ jobs:
       - name: Eval gate (permission leak + grounded answer)
         run: python -m evals.run
 
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Install
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install -e .
+          pip install ruff==0.8.4 mypy==1.14.0 pip-audit==2.7.3
+      - name: Ruff
+        run: ruff check .
+      - name: Mypy
+        run: mypy
+      - name: Audit Python dependencies
+        # Advisory: a new CVE in a pinned dep should be visible without blocking
+        # unrelated work. Promote to a hard gate once the noise level is known.
+        continue-on-error: true
+        run: pip-audit --requirement requirements.txt --strict
+
   web:
     runs-on: ubuntu-latest
     defaults:
@@ -60,6 +83,9 @@ jobs:
           cache-dependency-path: frontend/package-lock.json
       - run: npm ci
       - run: npm run build
+      - name: Audit npm dependencies
+        continue-on-error: true  # advisory, same reasoning as pip-audit
+        run: npm audit --audit-level=high
 
   compose:
     runs-on: ubuntu-latest
