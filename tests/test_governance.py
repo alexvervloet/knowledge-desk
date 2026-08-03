@@ -127,6 +127,32 @@ def test_delete_tenant_is_owner_only_and_cascades():
 # --- row-level security ----------------------------------------------------
 
 
+def test_pooled_connection_does_not_inherit_previous_tenant():
+    """The pooling landmine: the tenant GUC must be transaction-scoped. If it
+    were session-scoped it would survive the commit, ride the connection back
+    into the pool, and hand the next borrower the previous tenant's context.
+    Borrowing repeatedly until the same connection is reused proves it does not.
+    """
+    a = signup("acme", "o@acme.test")
+    upload(a, [{"path": "acme-only.txt", "content": "acme confidential data", "acl": ["public-to-org"]}])
+    org_a = org_of(a)
+
+    seen_ids = set()
+    for _ in range(5):
+        # A scoped borrow, exactly as a request would do.
+        with connect(org_a) as conn:
+            seen_ids.add(id(conn))
+            assert conn.execute("select count(*) as n from documents").fetchone()["n"] == 1
+        # An unscoped borrow: whatever connection this gets, it must see nothing.
+        with connect() as conn:
+            seen_ids.add(id(conn))
+            assert conn.execute("select count(*) as n from documents").fetchone()["n"] == 0
+
+    # The pool really did hand back the same connection object at least once,
+    # so the assertions above exercised reuse rather than fresh connections.
+    assert len(seen_ids) < 10
+
+
 def test_rls_blocks_query_without_org_context():
     token = signup("acme", "o@acme.test")
     upload(token, [{"path": "a.txt", "content": "hello world", "acl": ["public-to-org"]}])
