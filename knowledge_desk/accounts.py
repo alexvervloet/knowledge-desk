@@ -8,7 +8,7 @@ org-scoped data goes through TenantScope instead.
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 import psycopg
 
@@ -19,7 +19,7 @@ from knowledge_desk.auth import (
     verify_password,
 )
 from knowledge_desk.config import settings
-from knowledge_desk.db import connect
+from knowledge_desk.db import connect, require_row
 from knowledge_desk.errors import AuthError, Conflict, NotFound
 from knowledge_desk.tenancy import AuthContext
 
@@ -31,15 +31,15 @@ def create_org_with_owner(
     email = email.strip().lower()
     try:
         with connect() as conn:
-            org = conn.execute(
+            org = require_row(conn.execute(
                 "insert into orgs(slug, name) values (%s, %s) returning id",
                 (org_slug, org_name),
-            ).fetchone()
-            user = conn.execute(
+            ).fetchone())
+            user = require_row(conn.execute(
                 "insert into users(email, password_hash) values (%s, %s)"
                 " returning id",
                 (email, hash_password(password)),
-            ).fetchone()
+            ).fetchone())
             conn.execute(
                 "insert into memberships(user_id, org_id, role)"
                 " values (%s, %s, 'owner')",
@@ -62,11 +62,11 @@ def add_member(org_id: str, email: str, password: str, role: str) -> str:
             "select id from users where email = %s", (email,)
         ).fetchone()
         if user is None:
-            user = conn.execute(
+            user = require_row(conn.execute(
                 "insert into users(email, password_hash) values (%s, %s)"
                 " returning id",
                 (email, hash_password(password)),
-            ).fetchone()
+            ).fetchone())
         try:
             conn.execute(
                 "insert into memberships(user_id, org_id, role) values (%s, %s, %s)",
@@ -114,7 +114,7 @@ def authenticate(email: str, password: str, org_slug: str | None = None) -> Auth
 def create_session(ctx: AuthContext) -> str:
     """Persist a session for the acting context; return the raw bearer token."""
     raw, token_hash = new_session_token()
-    expires_at = datetime.now(timezone.utc) + timedelta(hours=settings.session_ttl_hours)
+    expires_at = datetime.now(UTC) + timedelta(hours=settings.session_ttl_hours)
     with connect() as conn:
         conn.execute(
             "insert into sessions(token_hash, user_id, org_id, expires_at)"
@@ -137,7 +137,7 @@ def resolve_session(raw_token: str) -> AuthContext | None:
         ).fetchone()
     if row is None:
         return None
-    if row["expires_at"] <= datetime.now(timezone.utc):
+    if row["expires_at"] <= datetime.now(UTC):
         return None
     return AuthContext(
         user_id=str(row["user_id"]),

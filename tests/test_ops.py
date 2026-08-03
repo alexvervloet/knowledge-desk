@@ -53,7 +53,7 @@ def upload(token: str, docs: list[dict]):
 def ask_events(token: str, question: str) -> list[dict]:
     resp = client.post("/ask", headers=auth(token), json={"question": question})
     assert resp.status_code == 200, resp.text
-    return [json.loads(l[6:]) for l in resp.text.splitlines() if l.startswith("data: ")]
+    return [json.loads(line[6:]) for line in resp.text.splitlines() if line.startswith("data: ")]
 
 
 def types(events: list[dict]) -> set[str]:

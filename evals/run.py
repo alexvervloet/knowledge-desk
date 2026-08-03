@@ -69,7 +69,7 @@ def _upload(token: str, docs: list[dict]) -> None:
 
 def _ask(token: str, question: str) -> list[dict]:
     resp = client.post("/ask", headers=_headers(token), json={"question": question})
-    return [json.loads(l[6:]) for l in resp.text.splitlines() if l.startswith("data: ")]
+    return [json.loads(line[6:]) for line in resp.text.splitlines() if line.startswith("data: ")]
 
 
 def _sources(events: list[dict]) -> list[dict]:

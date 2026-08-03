@@ -16,7 +16,7 @@ from psycopg.types.json import Json
 
 from knowledge_desk import jobs, pii
 from knowledge_desk.chunking import chunk_text
-from knowledge_desk.db import connect
+from knowledge_desk.db import connect, require_row
 from knowledge_desk.embeddings import get_embedder
 
 DEFAULT_ACL = ["public-to-org"]
@@ -62,7 +62,7 @@ def sync_documents(
                 continue
 
             pii_types = pii.detect_types(content)
-            doc = conn.execute(
+            doc = require_row(conn.execute(
                 "insert into documents(org_id, source, path, content, content_hash, acl, pii_types, status)"
                 " values (%s, %s, %s, %s, %s, %s, %s, 'pending')"
                 " on conflict (org_id, source, path) do update set"
@@ -72,7 +72,7 @@ def sync_documents(
                 " returning id",
                 (org_id, source, item["path"], content, content_hash, Json(acl),
                  Json(pii_types)),
-            ).fetchone()
+            ).fetchone())
             enqueued += 1
             # Enqueue after the row is committed by the surrounding block; the
             # key includes the hash so a re-upload of identical bytes is a no-op.
@@ -122,7 +122,7 @@ def process_ingest_document(org_id: str, payload: dict[str, Any]) -> None:
 
     with connect(org_id) as conn:
         conn.execute("delete from chunks where document_id = %s", (document_id,))
-        for ordinal, (text, embedding) in enumerate(zip(texts, embeddings)):
+        for ordinal, (text, embedding) in enumerate(zip(texts, embeddings, strict=False)):
             # acl is denormalized from the parent document so that access-scoped
             # vector search can filter and order on the same relation (see
             # migration 0010). update_document_acl keeps the copies in sync.

@@ -22,7 +22,7 @@ import psycopg
 
 from knowledge_desk import accounts
 from knowledge_desk.config import settings
-from knowledge_desk.db import close_pool, connect
+from knowledge_desk.db import close_pool, connect, require_row
 from knowledge_desk.embeddings import EMBED_DIM
 from knowledge_desk.tenancy import TenantScope
 
@@ -50,12 +50,12 @@ def _seed(chunks: int, with_index: bool = False, seed: int = 7) -> tuple[str, st
     doc_ids: list[str] = []
     with connect(ctx.org_id) as conn:
         for i in range((chunks + per_doc - 1) // per_doc):
-            row = conn.execute(
+            row = require_row(conn.execute(
                 "insert into documents(org_id, source, path, content, content_hash, acl, status)"
                 " values (%s, 'bench', %s, '', %s, '[\"public-to-org\"]'::jsonb, 'ingested')"
                 " returning id",
                 (ctx.org_id, f"bench/doc{i:05d}.md", f"hash{i:05d}"),
-            ).fetchone()
+            ).fetchone())
             doc_ids.append(str(row["id"]))
 
     # Bulk load as the owner for two reasons. Postgres refuses COPY FROM on a
@@ -129,11 +129,11 @@ def _main() -> int:
     rng = random.Random(11)
 
     with connect(org_id) as conn:
-        n = conn.execute("select count(*) as n from chunks").fetchone()["n"]
-        has_index = conn.execute(
+        n = require_row(conn.execute("select count(*) as n from chunks").fetchone())["n"]
+        has_index = require_row(conn.execute(
             "select count(*) as n from pg_indexes where tablename = 'chunks'"
             " and indexdef ilike '%%hnsw%%'"
-        ).fetchone()["n"] > 0
+        ).fetchone())["n"] > 0
 
     _time_search(scope, 3, rng)  # warm the cache so we measure steady state
     timings = _time_search(scope, args.queries, rng)

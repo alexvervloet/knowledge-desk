@@ -48,9 +48,9 @@ class AskTracer:
 
     def __init__(self, question: str, org_id: str, user_id: str, email: str,
                  provider_name: str, model: str) -> None:
-        self._root = None
-        self._retrieval = None
-        self._gen = None
+        self._root: Any = None
+        self._retrieval: Any = None
+        self._gen: Any = None
         self._answer: list[str] = []
         self._question = question
         self._model = model

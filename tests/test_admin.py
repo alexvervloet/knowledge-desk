@@ -58,7 +58,7 @@ def test_cannot_change_own_role():
 
 def test_cannot_demote_last_owner():
     owner = signup("acme", "o@acme.test")
-    admin_id = add_member(owner, "adm@acme.test", "admin")
+    add_member(owner, "adm@acme.test", "admin")
     admin = login("adm@acme.test", "acme")
     # An admin tries to demote the sole owner: refused to keep an owner in the org.
     assert client.patch(f"/members/{me_id(owner)}", headers=auth(admin), json={"role": "member"}).status_code == 403

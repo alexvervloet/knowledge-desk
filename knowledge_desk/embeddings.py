@@ -59,7 +59,8 @@ class VoyageEmbedder:
 
     def _embed(self, texts: list[str], input_type: str) -> list[list[float]]:
         result = self._client.embed(texts, model=self._model, input_type=input_type)
-        return result.embeddings
+        # The SDK types embeddings as float or int lists; ours are always floats.
+        return [[float(v) for v in row] for row in result.embeddings]
 
     def embed_documents(self, texts: list[str]) -> list[list[float]]:
         return self._embed(texts, "document")

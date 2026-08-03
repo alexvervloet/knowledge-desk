@@ -10,13 +10,14 @@ Idempotent: an org that already exists is left alone. Prints the demo logins.
 from __future__ import annotations
 
 import sys
+from typing import Any
 
 from knowledge_desk import accounts, ingest
 from knowledge_desk.db import connect
 
 DEMO_PASSWORD = "demo-password-123"
 
-_ORGS = [
+_ORGS: list[dict[str, Any]] = [
     {
         "slug": "acme",
         "name": "Acme Corp",
@@ -57,7 +58,7 @@ def seed() -> None:
 
     processed = ingest.run_pending()
     print(f"  ingested: {processed}")
-    print("\ndemo logins (password: %s):" % DEMO_PASSWORD)
+    print(f"\ndemo logins (password: {DEMO_PASSWORD}):")
     for spec in _ORGS:
         print(f"  org={spec['slug']:8} email={spec['owner']}")
 

@@ -14,11 +14,12 @@ from typing import Any
 
 import psycopg
 from pgvector.psycopg import Vector
+from psycopg.rows import DictRow
 from psycopg.types.json import Json
 
 from knowledge_desk.auth import role_at_least
 from knowledge_desk.config import settings
-from knowledge_desk.db import connect
+from knowledge_desk.db import connect, require_row
 from knowledge_desk.errors import Conflict, Forbidden, NotFound
 
 
@@ -58,11 +59,11 @@ class TenantScope:
         self.require_role("admin")
         try:
             with connect(self.org_id) as conn:
-                return conn.execute(
+                return require_row(conn.execute(
                     "insert into groups(org_id, name) values (%s, %s)"
                     " returning id, name, created_at",
                     (self.org_id, name),
-                ).fetchone()
+                ).fetchone())
         except psycopg.errors.UniqueViolation as exc:
             raise Conflict(f"group already exists: {name}") from exc
 
@@ -129,11 +130,11 @@ class TenantScope:
 
     # --- members ----------------------------------------------------------
 
-    def _owner_count(self, conn: psycopg.Connection) -> int:
-        return conn.execute(
+    def _owner_count(self, conn: psycopg.Connection[DictRow]) -> int:
+        return require_row(conn.execute(
             "select count(*) as n from memberships where org_id = %s and role = 'owner'",
             (self.org_id,),
-        ).fetchone()["n"]
+        ).fetchone())["n"]
 
     def set_member_role(self, user_id: str, role: str) -> None:
         """Change a member's role. You cannot change your own role (avoids
@@ -246,16 +247,16 @@ class TenantScope:
         retriever trace span). Two cheap counts, only computed when tracing."""
         principals = self.principals()
         with connect(self.org_id) as conn:
-            org_chunks = conn.execute(
+            org_chunks = require_row(conn.execute(
                 "select count(*) as n from chunks c join documents d on d.id = c.document_id"
                 " where c.org_id = %s and d.status = 'ingested'",
                 (self.org_id,),
-            ).fetchone()["n"]
-            allowed = conn.execute(
+            ).fetchone())["n"]
+            allowed = require_row(conn.execute(
                 "select count(*) as n from chunks c join documents d on d.id = c.document_id"
                 " where c.org_id = %s and d.status = 'ingested' and c.acl ?| %s",
                 (self.org_id, principals),
-            ).fetchone()["n"]
+            ).fetchone())["n"]
         return {"org_chunks": int(org_chunks), "allowed_chunks": int(allowed)}
 
     def search(self, query_embedding: list[float], k: int = 5) -> list[dict[str, Any]]:
@@ -285,11 +286,11 @@ class TenantScope:
 
     def record_answer(self, question: str, provider: str, refused: bool) -> str:
         with connect(self.org_id) as conn:
-            row = conn.execute(
+            row = require_row(conn.execute(
                 "insert into answers(org_id, user_id, question, provider, refused)"
                 " values (%s, %s, %s, %s, %s) returning id",
                 (self.org_id, self.ctx.user_id, question, provider, refused),
-            ).fetchone()
+            ).fetchone())
         return str(row["id"])
 
     def finalize_answer(
@@ -311,32 +312,32 @@ class TenantScope:
 
     def spend_last_24h(self) -> float:
         with connect(self.org_id) as conn:
-            row = conn.execute(
+            row = require_row(conn.execute(
                 "select coalesce(sum(cost_usd), 0) as spend from answers"
                 " where org_id = %s and created_at > now() - interval '24 hours'",
                 (self.org_id,),
-            ).fetchone()
+            ).fetchone())
         return float(row["spend"])
 
     def questions_this_month(self) -> int:
         with connect(self.org_id) as conn:
-            row = conn.execute(
+            row = require_row(conn.execute(
                 "select count(*) as n from answers where org_id = %s"
                 " and created_at >= date_trunc('month', now())",
                 (self.org_id,),
-            ).fetchone()
+            ).fetchone())
         return int(row["n"])
 
     def storage_usage(self) -> dict[str, int]:
         """Live document count and total content bytes for this org (excluding
         deleted documents). Used to enforce ingest caps."""
         with connect(self.org_id) as conn:
-            row = conn.execute(
+            row = require_row(conn.execute(
                 "select count(*) as docs,"
                 " coalesce(sum(octet_length(content)), 0) as bytes"
                 " from documents where org_id = %s and status <> 'deleted'",
                 (self.org_id,),
-            ).fetchone()
+            ).fetchone())
         return {"docs": int(row["docs"]), "bytes": int(row["bytes"])}
 
     def list_audit(self, limit: int = 100) -> list[dict[str, Any]]:
