@@ -18,6 +18,11 @@ class Settings(BaseSettings):
     # Least-privilege app role: every runtime query. Non-owner so RLS applies.
     app_database_url: str = "postgresql://kd_app:kd_app@localhost:5436/knowledge_desk"
 
+    # Connection pool bounds. Keep max at or below the database's connection
+    # limit divided by the number of running processes (api plus worker).
+    db_pool_min: int = 1
+    db_pool_max: int = 10
+
     anthropic_api_key: str | None = None
     voyage_api_key: str | None = None
 

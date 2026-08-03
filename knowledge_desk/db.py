@@ -1,5 +1,17 @@
-"""Database access. One connection per unit of work in Phase 1; a pool is a
-later optimization noted in the plan. Rows come back as dicts.
+"""Database access: a shared connection pool, and the per-request tenant context
+that row-level security keys on.
+
+The tenant GUC is set **transaction-scoped** (`set_config(..., true)`), which is
+load-bearing once connections are pooled. A session-scoped setting survives the
+commit and rides the connection back into the pool, so the next request to borrow
+that connection would silently inherit the previous tenant's org context. A
+transaction-scoped setting reverts on commit, so a recycled connection always
+starts with no tenant and the RLS policies deny by default.
+
+Because the GUC is transaction-scoped, every statement in a `connect(org_id)`
+block must run inside the same transaction. psycopg opens one implicitly on the
+first statement and holds it until the pool commits at block exit, so this is the
+default behavior; committing in the middle of a block would drop the context.
 """
 
 from __future__ import annotations
@@ -10,29 +22,50 @@ from typing import Iterator
 import psycopg
 from pgvector.psycopg import register_vector
 from psycopg.rows import dict_row
+from psycopg_pool import ConnectionPool
 
 from knowledge_desk.config import settings
+
+_pool: ConnectionPool | None = None
+
+
+def _configure(conn: psycopg.Connection) -> None:
+    """Run once per physical connection, not per checkout."""
+    register_vector(conn)
+
+
+def get_pool() -> ConnectionPool:
+    global _pool
+    if _pool is None:
+        _pool = ConnectionPool(
+            settings.app_database_url,
+            min_size=settings.db_pool_min,
+            max_size=settings.db_pool_max,
+            kwargs={"row_factory": dict_row},
+            configure=_configure,
+            check=ConnectionPool.check_connection,  # discard connections killed server-side
+            open=True,
+        )
+    return _pool
+
+
+def close_pool() -> None:
+    global _pool
+    if _pool is not None:
+        _pool.close()
+        _pool = None
 
 
 @contextmanager
 def connect(org_id: str | None = None) -> Iterator[psycopg.Connection]:
-    """A connection that commits on clean exit and rolls back on error. The
-    pgvector adapter is registered so Python lists bind to `vector` columns.
+    """Borrow a pooled connection. Commits on clean exit, rolls back on error.
 
-    When `org_id` is given, it is set as the `app.current_org` GUC, which the
-    row-level-security policies on org-scoped tables key on. With no org_id
-    those policies see NULL and return no rows, so a query that forgets its
-    tenant filter yields nothing rather than leaking across tenants.
+    When `org_id` is given it is set as the transaction-scoped `app.current_org`
+    GUC that the RLS policies read. With no org_id the policies see an empty
+    setting and return no rows, so a query that forgets its tenant filter yields
+    nothing rather than leaking across tenants.
     """
-    conn = psycopg.connect(settings.app_database_url, row_factory=dict_row)
-    register_vector(conn)
-    if org_id is not None:
-        conn.execute("select set_config('app.current_org', %s, false)", (org_id,))
-    try:
+    with get_pool().connection() as conn:
+        if org_id is not None:
+            conn.execute("select set_config('app.current_org', %s, true)", (org_id,))
         yield conn
-        conn.commit()
-    except Exception:
-        conn.rollback()
-        raise
-    finally:
-        conn.close()
