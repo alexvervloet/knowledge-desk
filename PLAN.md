@@ -302,6 +302,44 @@ The build is feature-complete: all ten phases are done in code and green in CI.
 What remains is external-account work (the fly deploy and the Langfuse account),
 both prepared and documented, both [Alex].
 
+## Hardening pass (post Phase 9)
+
+A review pass looking for what a senior reviewer would find first. Each item was
+measured rather than assumed.
+
+- [x] **Connection pooling**, with the tenancy bug it exposes. The RLS tenant GUC
+      was session-scoped, which is invisible with a connection per request and a
+      cross-tenant leak the moment connections are reused. Now transaction-scoped,
+      with a test that borrows until the pool reuses a connection and asserts it
+      carries no tenant context. The policies also `nullif` the cleared setting,
+      because a reverted GUC is an empty string rather than NULL.
+- [x] **Prompt injection.** Retrieved documents are attacker-controlled input.
+      They are now delimited as untrusted content, the system prompt states that
+      context is data and not instructions, forged delimiters are neutralized, and
+      an eval gates merges on it.
+- [x] **Architecture diagram** in the README (mermaid, renders on GitHub), showing
+      the request path and the three isolation layers.
+- [x] **Retrieval at scale, measured** (`python -m knowledge_desk.bench`). 100k
+      chunks, 1024-dim, this laptop:
+
+| configuration | p50 | p95 | plan |
+|---|---|---|---|
+| no vector index, RLS on | 569 ms | 2272 ms | seq scan |
+| HNSW index, RLS on (this system) | 575 ms | 595 ms | seq scan, index unused |
+| HNSW index, RLS bypassed | 367 ms | 392 ms | index scan |
+
+  The result is negative and worth keeping: **row-level security stops the planner
+  from using the vector index** for our access-scoped query. Same query, same data,
+  same session settings, a role that bypasses RLS uses the index and the app role
+  does not. Marking pgvector's `cosine_distance` LEAKPROOF was tested and did not
+  change the plan. The index also took bulk loading from 28s to 355s, so under RLS
+  it is pure cost. It was added (0010), measured, and dropped again (0011). We keep
+  RLS and accept the scan; the escape hatch is documented in WALKTHROUGH.md.
+
+  Kept from that work: the ACL is denormalized onto `chunks`, because filtering on
+  the joined `documents` table defeated the index even before RLS did, and the
+  chunk-local filter is the shape that would benefit if the index ever returns.
+
 ## Open decisions to revisit
 
 - Job queue stays Postgres-backed until a phase actually needs concurrency it
