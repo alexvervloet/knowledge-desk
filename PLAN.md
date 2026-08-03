@@ -340,6 +340,18 @@ measured rather than assumed.
   the joined `documents` table defeated the index even before RLS did, and the
   chunk-local filter is the shape that would benefit if the index ever returns.
 
+- [x] **Lint and type checking in CI.** Ruff (lint only, not the formatter, which
+      collapses deliberately split SQL into unreadable one-line concatenations) and
+      mypy, both clean and both gating. Typing the pool as `Connection[DictRow]`
+      removed 48 of 74 mypy errors by itself; the rest were unchecked `fetchone()`
+      results, now unwrapped by `require_row` at the sites where a row is genuinely
+      guaranteed (inserts with RETURNING, aggregates) and left as explicit None
+      checks where matching nothing is a real outcome.
+- [x] **Dependency hygiene.** Dependabot for pip, npm, Actions, and Docker, plus
+      advisory `pip-audit` and `npm audit` steps.
+- [x] **Pagination** on the document, member, and audit listings (`limit`,
+      `offset`, bounded 1 to 500), with tests for bounds and disjoint pages.
+
 ## Open decisions to revisit
 
 - Job queue stays Postgres-backed until a phase actually needs concurrency it
@@ -348,6 +360,19 @@ measured rather than assumed.
   record the moment flat groups stop being enough.
 - Auth stays built-in until a reviewer or a real user needs SSO; the OIDC seam is
   left open but unbuilt.
+- **Session token lives in `localStorage`**, which any successful XSS can read.
+  The alternative, an httpOnly cookie, moves the risk rather than removing it:
+  the token becomes unreadable to script but the browser then attaches it
+  automatically, so the app needs CSRF protection it does not need today, and
+  the SPA loses the ability to talk to an API on another origin without cookie
+  and CORS gymnastics. Neither option is strictly better. Keeping it explicit:
+  the current choice trades XSS exposure for a simpler, origin-independent API,
+  and it is the wrong trade the moment this app renders untrusted HTML or
+  embeds third-party script. Revisit then, and revisit before any real customer
+  data lands.
+- **Dependency audits are advisory** (`continue-on-error`) rather than blocking,
+  because a fresh CVE in a transitive pin should not stop unrelated work on a
+  portfolio project. Promote to a hard gate once the noise level is known.
 
 ## Gotcha log
 
