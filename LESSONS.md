@@ -189,3 +189,66 @@ Takeaway: separate the parts of "deploy" that are engineering from the parts tha
 are billing and account provisioning, and surface the second kind early. The most
 production-ready artifact in the world still waits on a credit card and a managed
 database that has the extension you need.
+
+## 13. Connection pooling can hand the next request your tenant context
+
+Row-level security keys on a per-connection setting, and the original code set it
+with `set_config('app.current_org', org, false)`. That third argument means
+session-scoped, which was harmless while every request opened its own connection
+and closed it. Adding a pool turned it into a cross-tenant bug: the setting
+survives the commit, rides the connection back into the pool, and the next
+request to borrow it starts already scoped to the previous tenant. Any query that
+then forgot its own filter would read another org's rows. The fix is one boolean
+(`true`, transaction-scoped, reverts at commit), and the regression test borrows
+repeatedly until the pool hands back a connection it has already used.
+
+Takeaway: connection-scoped state and connection pooling are a trap, because the
+pool's whole job is to make connection reuse invisible. Before adding a pool,
+inventory everything your code sets on a connection and ask what happens if the
+next request inherits it.
+
+## 14. Deny-by-default was relying on NULL, and a cleared setting is not NULL
+
+Flipping that boolean immediately broke the RLS test, in an instructive way. The
+policies compared `org_id = current_setting('app.current_org', true)::uuid`, and
+with a fresh connection the setting was unset, so `current_setting` returned NULL
+and the comparison matched nothing. That was the deny-by-default. A
+transaction-scoped setting does not revert to unset, though; it reverts to the
+empty string, and `''::uuid` raises rather than returning NULL. The policy went
+from denying quietly to erroring loudly. Not a leak, but a 500 where an empty
+result belongs, so the policies now `nullif(setting, '')` before the cast.
+
+Takeaway: "no rows" and "invalid input" are different failures, and a security
+rule that leans on NULL semantics deserves an explicit test for every state its
+input can be in, including empty, not just set and unset.
+
+## 15. Row-level security quietly forbids COPY
+
+Seeding a benchmark corpus through the app's own least-privilege role failed with
+"COPY FROM not supported with row-level security." Postgres refuses bulk loading
+into a table with RLS enabled, full stop, because it cannot evaluate the policy
+per row the way COPY streams data. The defense-in-depth that protects every
+request also removes the fastest write path in the database, so bulk imports have
+to run on an admin connection outside the policy, which is a real operational
+seam to design rather than discover.
+
+Takeaway: a security control applied at the storage layer constrains everything
+that touches storage, including the maintenance paths you were not thinking about
+when you enabled it. Check your bulk-load and backfill story before turning on
+RLS, not after.
+
+## 16. Retrieved documents are the untrusted input in a RAG system
+
+The assistant read documents that users upload and passed their text straight
+into the model prompt, unlabelled. That is the exact shape of an indirect prompt
+injection: an attacker does not need to talk to the model, they only need to get
+a document into the corpus. The hardening is layered, because no single measure
+is reliable: the system prompt states that context is data and never
+instructions, retrieved text is wrapped in explicit untrusted-content markers so
+the boundary is locatable, and any occurrence of those markers inside a document
+is neutralized first so a document cannot forge a closing delimiter and escape
+into what looks like instruction space.
+
+Takeaway: in a retrieval system, the documents are attacker-controlled input.
+Delimit them, say so in the system prompt, and defend the delimiter itself,
+because the first thing a serious injection tries is to close your fence.
