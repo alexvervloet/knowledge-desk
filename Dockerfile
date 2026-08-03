@@ -2,7 +2,7 @@
 # Python image. The worker runs from this same image with a different command.
 
 # --- stage 1: build the frontend -----------------------------------------
-FROM node:20-slim AS web
+FROM node:26-slim AS web
 WORKDIR /web
 COPY frontend/package.json frontend/package-lock.json ./
 RUN npm ci
