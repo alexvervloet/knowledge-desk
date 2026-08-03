@@ -5,7 +5,7 @@ psycopg-pool==3.2.4
 pydantic==2.10.4
 pydantic-settings==2.7.1
 python-dotenv==1.0.1
-bcrypt==4.2.1
+bcrypt==5.0.0
 pgvector==0.3.6
 voyageai==0.3.7
 langfuse==4.14.0
