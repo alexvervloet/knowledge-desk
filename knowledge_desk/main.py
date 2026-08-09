@@ -10,7 +10,7 @@ from __future__ import annotations
 import json
 from typing import Annotated
 
-from fastapi import Depends, FastAPI, HTTPException, Response, status
+from fastapi import Depends, FastAPI, HTTPException, Query, Response, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
@@ -135,8 +135,12 @@ def add_member(
 
 
 @app.get("/members")
-def list_members(scope: Annotated[TenantScope, Depends(current_scope)]) -> list[dict]:
-    return scope.list_members()
+def list_members(
+    scope: Annotated[TenantScope, Depends(current_scope)],
+    limit: int = Query(default=100, ge=1, le=500),
+    offset: int = Query(default=0, ge=0),
+) -> list[dict]:
+    return scope.list_members(limit, offset)
 
 
 class SetRoleRequest(BaseModel):
@@ -266,8 +270,12 @@ def upload_folder(
 
 
 @app.get("/documents")
-def list_documents(scope: Annotated[TenantScope, Depends(current_scope)]) -> list[dict]:
-    return scope.list_documents()
+def list_documents(
+    scope: Annotated[TenantScope, Depends(current_scope)],
+    limit: int = Query(default=100, ge=1, le=500),
+    offset: int = Query(default=0, ge=0),
+) -> list[dict]:
+    return scope.list_documents(limit, offset)
 
 
 @app.delete("/documents/{document_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -369,10 +377,14 @@ def ask(req: AskRequest, scope: Annotated[TenantScope, Depends(current_scope)]):
 
 
 @app.get("/audit")
-def audit_log(scope: Annotated[TenantScope, Depends(current_scope)]) -> list[dict]:
+def audit_log(
+    scope: Annotated[TenantScope, Depends(current_scope)],
+    limit: int = Query(default=100, ge=1, le=500),
+    offset: int = Query(default=0, ge=0),
+) -> list[dict]:
     """Recent audit events for the caller's org. Admin only."""
     scope.require_role("admin")
-    return scope.list_audit()
+    return scope.list_audit(limit, offset)
 
 
 @app.get("/usage")
