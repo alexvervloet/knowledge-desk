@@ -5,8 +5,13 @@ decision points where the system could go a different way, the places it will
 surprise you, and the shapes of problem it is and is not good at.
 
 This is not the setup guide (see [README.md](README.md)) and not the build log
-(see [PLAN.md](PLAN.md) and [LESSONS.md](LESSONS.md)). Every output quoted here
-was captured from an actual run against the seeded demo data.
+(see [LESSONS.md](LESSONS.md)). Every output quoted here was captured from an
+actual run against the seeded demo data.
+
+You can follow along on the deployment at **https://knowledge-desk.fly.dev**,
+logging in as `owner@acme.test` or `owner@globex.test` with the password
+`demo-password-123`. `./demo/ask.sh acme "how long do refunds take?"` runs Step 4
+and Step 5 from a terminal.
 
 ---
 
@@ -153,6 +158,21 @@ That refusal is the permission boundary reaching all the way through to the
 generated text. A user cannot learn the contents of a forbidden document, and
 cannot get a plausible-sounding answer assembled from general knowledge either.
 
+**Retrieved documents are treated as data, not instructions.** In a system whose
+whole job is reading files other people uploaded, the documents are
+attacker-controlled input: nobody needs to talk to the model, they only need to
+get a file into the corpus. Passages are wrapped in explicit untrusted-content
+markers, the system prompt says context is data and never instructions, and any
+occurrence of those markers inside a document is neutralized first, so a document
+cannot forge a closing delimiter and escape into what looks like instruction
+space. A merge-gating eval asserts the boundary survives a document that tries
+exactly that.
+
+This is mitigation, not a proof. Delimiting and instructing reduce the success
+rate of injection; they do not make a language model incapable of being talked
+around. Treat it as defense in depth alongside the permission boundary, which is
+enforced in SQL and does not depend on the model behaving.
+
 **Gotcha: there is no relevance threshold.** Retrieval returns the nearest `k`
 chunks, and "nearest" does not mean "relevant". Asked a question its corpus
 cannot answer, an org with documents still gets sources back. From a real run:
@@ -178,7 +198,12 @@ Every question writes an `answers` row with its token counts and cost estimate,
 which is what the budget sums over. Two different guardrails, and they announce
 themselves in deliberately different ways:
 
-**Per-user rate limit** (5 burst, 30 per minute) is an HTTP `429` with a
+The numbers below are the code defaults. The public deployment runs deliberately
+tighter ones, set in `fly.toml`, because the README publishes working credentials
+and the defaults were sizing the blast radius of a paying tenant rather than of a
+stranger: $1 a day, 300 questions a month, 3 burst, 10 per minute.
+
+**Per-user rate limit** (default 5 burst, 30 per minute) is an HTTP `429` with a
 `Retry-After` header, before the stream ever opens:
 
 ```
@@ -212,6 +237,13 @@ documents with status, chunk count, PII flags, and each document's ACL, editable
 in place. The Usage tab shows questions, spend, and storage against their caps,
 the month's top questions, and the recent audit events.
 
+**Gotcha: the listings are paginated and the UI does not page.** `/documents`,
+`/members`, and `/audit` take `limit` (default 100, max 500) and `offset`, but
+the React views call them without either, so an org with more than 100 documents
+sees the first 100 and no indication that the rest exist. Harmless on the demo
+data, wrong the moment a real tenant grows, and the fix is paging controls in the
+three admin views rather than anything on the server.
+
 PII detection runs at ingest and flags obvious formats (email, phone, SSN, card
 shapes) on the document row. It is a **visibility signal, not a gate**: a
 document with PII still ingests and is still retrievable. PII is redacted out of
@@ -234,6 +266,15 @@ is a security incident.
   layers (application filter, ACL fetch, Postgres row-level security) mean no
   single bug leaks data across tenants, and there is a test that proves a raw
   query with no tenant context returns nothing.
+
+  One caveat if you copy this design: **the third layer is a property of the role
+  you connect as, not of the tables.** A superuser, a table owner without FORCE,
+  or any role carrying `rolbypassrls` ignores the policies entirely. Managed
+  Postgres picks that role for you, and Neon's default `neondb_owner` does have
+  `rolbypassrls = true`, so pointing the app at the credential the provider hands
+  you would have silently removed the layer in production while every local test
+  stayed green. The deploy provisions a separate least-privilege role and then
+  verifies the deny against the real database.
 - **Auditable, cost-controlled deployments.** Every question is attributable to a
   user and an org, capped, logged, and traced. If someone asks "who asked what,
   and what did it cost us", there is an answer.
