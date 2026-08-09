@@ -34,8 +34,34 @@ async function req<T>(path: string, opts: RequestInit = {}): Promise<T> {
   return body as T;
 }
 
+export const PAGE_SIZE = 25;
+
+export type Page<T> = { items: T[]; total: number };
+
+/** GET one page of a listing, reading the total from the X-Total-Count header.
+ *  The body stays a plain array; only paginated endpoints send the header, and
+ *  a missing one falls back to the page length so callers still work. */
+async function getPage<T>(path: string, offset: number, limit = PAGE_SIZE): Promise<Page<T>> {
+  const sep = path.includes("?") ? "&" : "?";
+  const headers: Record<string, string> = {};
+  const token = getToken();
+  if (token) headers["Authorization"] = `Bearer ${token}`;
+
+  const resp = await fetch(`${BASE}${path}${sep}limit=${limit}&offset=${offset}`, { headers });
+  const text = await resp.text();
+  const body = text ? JSON.parse(text) : null;
+  if (!resp.ok) {
+    const detail = body?.detail ?? `request failed (${resp.status})`;
+    throw new ApiError(resp.status, typeof detail === "string" ? detail : JSON.stringify(detail));
+  }
+  const items = body as T[];
+  const header = resp.headers.get("X-Total-Count");
+  return { items, total: header === null ? items.length : Number(header) };
+}
+
 export const api = {
   get: <T>(p: string) => req<T>(p),
+  getPage,
   post: <T>(p: string, body?: unknown) => req<T>(p, { method: "POST", body: body ? JSON.stringify(body) : undefined }),
   patch: <T>(p: string, body?: unknown) => req<T>(p, { method: "PATCH", body: body ? JSON.stringify(body) : undefined }),
   del: <T = void>(p: string) => req<T>(p, { method: "DELETE" }),
