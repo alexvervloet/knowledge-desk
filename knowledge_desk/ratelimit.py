@@ -10,7 +10,7 @@ injectable so refill can be tested without real time passing.
 from __future__ import annotations
 
 import time
-from typing import Callable
+from collections.abc import Callable
 
 from knowledge_desk.config import settings
 
