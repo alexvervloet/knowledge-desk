@@ -284,3 +284,76 @@ the honest version of "is it scalable" is a table with a row you did not want,
 plus a documented decision about which property you are choosing to keep. A
 negative result you can reproduce is worth more than a benchmark that flatters
 the design.
+
+## 18. Eleven red pull requests were one red commit
+
+Dependabot's first run opened thirteen PRs and eleven were failing, which looks
+like a dependency apocalypse and was actually a single cause: they had all
+branched from a main whose lint job was broken, because three files with pending
+ruff fixes had been committed a few minutes too late. Every one of those PRs
+carried the same stale base and therefore the same failure. Rebasing them onto
+current main turned seven green immediately. The tell was in the shape of the
+failures, not their number: `lint` failed on all eleven, while the additional
+failures clustered on exactly the PRs that had a real problem.
+
+Takeaway: when a batch of independent branches fails together, read the failures
+as a set before debugging any one of them. Look for the check that fails on all
+of them, and suspect the base they share. Same instinct as three unrelated tools
+hanging on the same network stack.
+
+## 19. Dependabot splits changes that only work together
+
+Four of the remaining failures were coupled updates that Dependabot had filed as
+separate PRs, each unmergeable alone. React and react-dom must move as a set, and
+so must their `@types` packages, so the react PR left `@types/react-dom` behind
+and died on an unsatisfiable peer range while the react-dom PR failed the mirror
+image. The vite plugin tracks the vite major the same way. A fifth, the python
+3.14 base image, failed for a subtler version of the same thing: it was blocked
+by `voyageai==0.3.7`, which caps at Python 3.13, so the image bump could not land
+until a dependency in a different ecosystem moved first.
+
+Landing all four frontend majors as one commit built clean on the first try. The
+tool is not wrong to split them, it just cannot see the constraint.
+
+Takeaway: a dependency bot proposes one change per package, but the unit that
+actually works is one change per constraint group. When a bot's PR fails alone,
+check whether it is half of something before treating it as broken.
+
+## 20. Pinning exactly means every upgrade is a code change waiting to happen
+
+The python group bump carried pgvector 0.3.6 to 0.5.0, which moved `Vector` out
+of `pgvector.psycopg` and up to the package root. The import had already moved
+once during this build, so this was the second time the same line broke, and the
+type checker caught it before the tests did. Nothing about the version numbers
+suggested an API change, and nothing in the PR description mentioned it: the
+signal was a red CI job on a routine-looking dependency bump.
+
+The write-up matters more than the fix. A one-line import change is trivial; the
+thing worth recording is that this dependency relocates its main export between
+minor versions, so the next upgrade should be assumed to break it again.
+
+Takeaway: exact pins buy reproducibility and defer breakage rather than
+preventing it. Budget for the upgrade being a code change, keep a type checker in
+CI so the break surfaces as a compile error rather than a runtime one, and write
+down the dependencies that have burned you before, because they will again.
+
+## 21. A bot that opens pull requests needs something that closes them
+
+The thirteen PRs sat open not because anything was wrong with them but because
+nothing in the repo was responsible for merging them. Dependabot was configured
+in one commit and then left without a counterpart, which is a half-built
+automation: it generates work indefinitely and depends on a human noticing. The
+fix was a workflow that merges patch and minor updates once CI is green and
+leaves majors for review, which matches what actually happened here, where every
+major needed a judgment call and none of the minors did.
+
+Worth noting what the obvious implementation gets wrong. `gh pr merge --auto`
+only waits for checks when the branch has required status checks, which means
+branch protection, which means giving up direct pushes to main. Triggering on the
+CI workflow completing instead gets the same gate without changing how the repo
+is worked in.
+
+Takeaway: automation that creates work is only half an automation. When you add a
+bot, add the thing that resolves its output in the same change, and pick the
+trigger that matches your existing workflow instead of reshaping the workflow
+around the tool.
