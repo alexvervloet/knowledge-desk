@@ -237,12 +237,17 @@ documents with status, chunk count, PII flags, and each document's ACL, editable
 in place. The Usage tab shows questions, spend, and storage against their caps,
 the month's top questions, and the recent audit events.
 
-**Gotcha: the listings are paginated and the UI does not page.** `/documents`,
-`/members`, and `/audit` take `limit` (default 100, max 500) and `offset`, but
-the React views call them without either, so an org with more than 100 documents
-sees the first 100 and no indication that the rest exist. Harmless on the demo
-data, wrong the moment a real tenant grows, and the fix is paging controls in the
-three admin views rather than anything on the server.
+The listings are paginated. `/documents`, `/members`, and `/audit` take `limit`
+(default 100, max 500) and `offset`, and return the full row count in an
+`X-Total-Count` header, because a page alone cannot tell a client whether more
+exists. The header rather than a wrapper object keeps the response body a plain
+array, so nothing that already consumed these endpoints breaks. The admin views
+page 25 at a time and hide the controls entirely when everything fits.
+
+**Gotcha: the group picker is capped.** Adding a member to a group uses a select
+populated by a single request for up to 500 members. An org larger than that
+needs a search box instead of a dropdown, which is the point where this UI stops
+being adequate.
 
 PII detection runs at ingest and flags obvious formats (email, phone, SSN, card
 shapes) on the document row. It is a **visibility signal, not a gate**: a
