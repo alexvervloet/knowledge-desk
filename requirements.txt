@@ -1,16 +1,16 @@
-fastapi==0.115.6
-uvicorn[standard]==0.34.0
-psycopg[binary]==3.2.3
-psycopg-pool==3.2.4
-pydantic==2.10.4
-pydantic-settings==2.7.1
-python-dotenv==1.0.1
-bcrypt==4.2.1
-pgvector==0.3.6
-voyageai==0.3.7
-langfuse==4.14.0
-anthropic==0.120.0
+fastapi==0.141.1
+uvicorn[standard]==0.52.0
+psycopg[binary]==3.3.4
+psycopg-pool==3.3.1
+pydantic==2.13.4
+pydantic-settings==2.14.2
+python-dotenv==1.2.2
+bcrypt==5.0.0
+pgvector==0.5.0
+voyageai==0.5.0
+langfuse==4.14.2
+anthropic==0.120.2
 
 # tests
-pytest==8.3.4
+pytest==9.1.1
 httpx==0.28.1

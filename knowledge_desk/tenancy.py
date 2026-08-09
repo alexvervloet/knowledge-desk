@@ -13,7 +13,7 @@ from dataclasses import dataclass
 from typing import Any
 
 import psycopg
-from pgvector.psycopg import Vector
+from pgvector import Vector
 from psycopg.rows import DictRow
 from psycopg.types.json import Json
 
