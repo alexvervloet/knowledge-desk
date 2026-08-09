@@ -10,7 +10,8 @@ A provider's `stream(question, contexts)` yields event dicts:
 
 from __future__ import annotations
 
-from typing import Any, Iterator
+from collections.abc import Iterator
+from typing import Any
 
 from knowledge_desk.config import settings
 
