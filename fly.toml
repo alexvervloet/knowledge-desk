@@ -17,6 +17,16 @@ primary_region = "iad"
   # DATABASE_URL (owner) and APP_DATABASE_URL (least-privilege app role) are set
   # as secrets, never committed. Provider/observability keys are secrets too.
 
+  # The demo credentials are published in the README, so anyone can spend real
+  # model budget here. The defaults ($5 per org per day, 1000 questions a month)
+  # are sized for a tenant paying for itself, not for an open demo with two
+  # seeded orgs. Tighter numbers cap the worst case at a couple of dollars a day
+  # while leaving a reviewer plenty of room to try the thing.
+  DAILY_BUDGET_USD = "1.00"
+  MONTHLY_QUESTION_CAP = "300"
+  RATE_BURST = "3"
+  RATE_PER_MIN = "10"
+
 [processes]
   app = "uvicorn knowledge_desk.main:app --host 0.0.0.0 --port 8000"
   worker = "python -m knowledge_desk.worker"
