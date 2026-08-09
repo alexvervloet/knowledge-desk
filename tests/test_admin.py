@@ -130,6 +130,41 @@ def test_edit_document_acl_changes_visibility():
     assert client.post("/search", headers=auth(x), json={"query": "shared secret text"}).json()
 
 
+# --- pagination ------------------------------------------------------------
+
+
+def test_documents_paginate():
+    owner = signup("acme", "o@acme.test")
+    docs = [{"path": f"doc{i:02d}.txt", "content": f"content {i}", "acl": ["public-to-org"]}
+            for i in range(5)]
+    client.post("/sources/folder", headers=auth(owner), json={"documents": docs})
+    ingest.run_pending()
+
+    page1 = client.get("/documents?limit=2&offset=0", headers=auth(owner)).json()
+    page2 = client.get("/documents?limit=2&offset=2", headers=auth(owner)).json()
+    assert [d["path"] for d in page1] == ["doc00.txt", "doc01.txt"]
+    assert [d["path"] for d in page2] == ["doc02.txt", "doc03.txt"]
+    # Pages are disjoint, which is what makes offset paging usable at all.
+    assert not {d["id"] for d in page1} & {d["id"] for d in page2}
+
+
+def test_members_paginate():
+    owner = signup("acme", "o@acme.test")
+    for i in range(3):
+        add_member(owner, f"dev{i}@acme.test")
+    first = client.get("/members?limit=2", headers=auth(owner)).json()
+    assert len(first) == 2
+    rest = client.get("/members?limit=100&offset=2", headers=auth(owner)).json()
+    assert len(rest) == 2  # 4 members total: the owner plus three
+
+
+def test_pagination_rejects_bad_bounds():
+    owner = signup("acme", "o@acme.test")
+    assert client.get("/documents?limit=0", headers=auth(owner)).status_code == 422
+    assert client.get("/documents?limit=99999", headers=auth(owner)).status_code == 422
+    assert client.get("/documents?offset=-1", headers=auth(owner)).status_code == 422
+
+
 # --- usage summary ---------------------------------------------------------
 
 
