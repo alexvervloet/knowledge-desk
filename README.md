@@ -117,6 +117,14 @@ retrieve the other's content.
 
 **https://knowledge-desk.fly.dev**
 
+![Two tenants ask the same question and get different answers](demo.gif)
+
+Recorded against the live deployment with `vhs demo.tape`, so every answer above
+is a real Claude call over real retrieval. Acme's handbook answers the question.
+Globex retrieves only its own documents and the assistant refuses rather than
+reaching for the model's general knowledge, which is the permission boundary
+holding all the way through to the generated text.
+
 Log in with either account below (password `demo-password-123`) and ask
 "how long do refunds take?" in both. Acme answers it with a citation; Globex
 retrieves only its own documents and says it has nothing it is allowed to cite.
