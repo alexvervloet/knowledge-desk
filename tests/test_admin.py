@@ -158,6 +158,38 @@ def test_members_paginate():
     assert len(rest) == 2  # 4 members total: the owner plus three
 
 
+def test_pagination_reports_the_total_independent_of_the_page():
+    """The client cannot build paging controls from a page alone, so the total
+    rides along in a header. It must count everything, not the slice."""
+    owner = signup("acme", "o@acme.test")
+    docs = [{"path": f"doc{i:02d}.txt", "content": f"content {i}", "acl": ["public-to-org"]}
+            for i in range(5)]
+    client.post("/sources/folder", headers=auth(owner), json={"documents": docs})
+    ingest.run_pending()
+
+    page = client.get("/documents?limit=2&offset=0", headers=auth(owner))
+    assert len(page.json()) == 2
+    assert page.headers["X-Total-Count"] == "5"
+
+    last = client.get("/documents?limit=2&offset=4", headers=auth(owner))
+    assert len(last.json()) == 1  # partial final page
+    assert last.headers["X-Total-Count"] == "5"
+
+    # Members and audit expose it too, and the count is org-scoped.
+    assert client.get("/members", headers=auth(owner)).headers["X-Total-Count"] == "1"
+    assert int(client.get("/audit", headers=auth(owner)).headers["X-Total-Count"]) > 0
+
+
+def test_total_count_is_org_scoped():
+    a = signup("acme", "o@acme.test")
+    b = signup("globex", "o@globex.test")
+    client.post("/sources/folder", headers=auth(a),
+                json={"documents": [{"path": "a.txt", "content": "x", "acl": ["public-to-org"]}]})
+    ingest.run_pending()
+    assert client.get("/documents", headers=auth(a)).headers["X-Total-Count"] == "1"
+    assert client.get("/documents", headers=auth(b)).headers["X-Total-Count"] == "0"
+
+
 def test_pagination_rejects_bad_bounds():
     owner = signup("acme", "o@acme.test")
     assert client.get("/documents?limit=0", headers=auth(owner)).status_code == 422
