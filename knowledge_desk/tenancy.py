@@ -178,6 +178,16 @@ class TenantScope:
 
     # --- documents --------------------------------------------------------
 
+    def count_documents(self) -> int:
+        """Total documents in the org, for the X-Total-Count header. A separate
+        query rather than a window function over the page, because the page is
+        capped and the client needs the count of everything, not of the page."""
+        with connect(self.org_id) as conn:
+            return require_row(conn.execute(
+                "select count(*) as n from documents where org_id = %s",
+                (self.org_id,),
+            ).fetchone())["n"]
+
     def list_documents(self, limit: int = 100, offset: int = 0) -> list[dict[str, Any]]:
         with connect(self.org_id) as conn:
             return conn.execute(
@@ -341,6 +351,13 @@ class TenantScope:
             ).fetchone())
         return {"docs": int(row["docs"]), "bytes": int(row["bytes"])}
 
+    def count_audit(self) -> int:
+        with connect(self.org_id) as conn:
+            return require_row(conn.execute(
+                "select count(*) as n from audit_log where org_id = %s",
+                (self.org_id,),
+            ).fetchone())["n"]
+
     def list_audit(self, limit: int = 100, offset: int = 0) -> list[dict[str, Any]]:
         with connect(self.org_id) as conn:
             return conn.execute(
@@ -400,6 +417,13 @@ class TenantScope:
                 raise Conflict("feedback already recorded for this answer") from exc
 
     # --- members ----------------------------------------------------------
+
+    def count_members(self) -> int:
+        with connect(self.org_id) as conn:
+            return require_row(conn.execute(
+                "select count(*) as n from memberships where org_id = %s",
+                (self.org_id,),
+            ).fetchone())["n"]
 
     def list_members(self, limit: int = 100, offset: int = 0) -> list[dict[str, Any]]:
         with connect(self.org_id) as conn:
