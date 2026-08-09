@@ -13,7 +13,7 @@ import sys
 from typing import Any
 
 from knowledge_desk import accounts, ingest
-from knowledge_desk.db import connect
+from knowledge_desk.db import close_pool, connect
 
 DEMO_PASSWORD = "demo-password-123"
 
@@ -64,5 +64,12 @@ def seed() -> None:
 
 
 if __name__ == "__main__":
-    seed()
+    try:
+        seed()
+    finally:
+        # The pool's finalizer tries to join its worker threads, which Python
+        # 3.14 refuses at interpreter shutdown (PythonFinalizationError). Any
+        # short-lived process that borrows a connection has to close the pool
+        # itself rather than leave it to garbage collection.
+        close_pool()
     sys.exit(0)
