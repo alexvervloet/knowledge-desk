@@ -178,15 +178,16 @@ class TenantScope:
 
     # --- documents --------------------------------------------------------
 
-    def list_documents(self) -> list[dict[str, Any]]:
+    def list_documents(self, limit: int = 100, offset: int = 0) -> list[dict[str, Any]]:
         with connect(self.org_id) as conn:
             return conn.execute(
                 "select d.id, d.path, d.source, d.status, d.content_hash,"
                 " d.pii_types, d.acl, d.updated_at,"
                 " (select count(*) from chunks c where c.document_id = d.id)"
                 " as chunk_count"
-                " from documents d where d.org_id = %s order by d.path",
-                (self.org_id,),
+                " from documents d where d.org_id = %s order by d.path"
+                " limit %s offset %s",
+                (self.org_id, limit, offset),
             ).fetchall()
 
     def delete_document(self, document_id: str) -> None:
@@ -340,13 +341,14 @@ class TenantScope:
             ).fetchone())
         return {"docs": int(row["docs"]), "bytes": int(row["bytes"])}
 
-    def list_audit(self, limit: int = 100) -> list[dict[str, Any]]:
+    def list_audit(self, limit: int = 100, offset: int = 0) -> list[dict[str, Any]]:
         with connect(self.org_id) as conn:
             return conn.execute(
                 "select a.action, a.detail, a.created_at, u.email as actor"
                 " from audit_log a left join users u on u.id = a.actor_user_id"
-                " where a.org_id = %s order by a.created_at desc limit %s",
-                (self.org_id, limit),
+                " where a.org_id = %s order by a.created_at desc"
+                " limit %s offset %s",
+                (self.org_id, limit, offset),
             ).fetchall()
 
     def top_queries(self, limit: int = 5) -> list[dict[str, Any]]:
@@ -399,11 +401,11 @@ class TenantScope:
 
     # --- members ----------------------------------------------------------
 
-    def list_members(self) -> list[dict[str, Any]]:
+    def list_members(self, limit: int = 100, offset: int = 0) -> list[dict[str, Any]]:
         with connect(self.org_id) as conn:
             return conn.execute(
                 "select u.id, u.email, m.role, m.created_at"
                 " from memberships m join users u on u.id = m.user_id"
-                " where m.org_id = %s order by u.email",
-                (self.org_id,),
+                " where m.org_id = %s order by u.email limit %s offset %s",
+                (self.org_id, limit, offset),
             ).fetchall()
