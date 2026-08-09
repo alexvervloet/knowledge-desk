@@ -1,17 +1,27 @@
 import { ChangeEvent, useEffect, useState } from "react";
-import { ApiError, DocumentRow, api } from "../api";
+import { ApiError, DocumentRow, PAGE_SIZE, api } from "../api";
+import { Pager } from "./Pager";
 
 export function Sources({ isAdmin }: { isAdmin: boolean }) {
   const [docs, setDocs] = useState<DocumentRow[]>([]);
+  const [total, setTotal] = useState(0);
+  const [offset, setOffset] = useState(0);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
 
-  async function refresh() {
-    try { setDocs(await api.get<DocumentRow[]>("/documents")); }
-    catch (err) { setError(err instanceof ApiError ? err.message : "failed to load"); }
+  async function refresh(at = offset) {
+    try {
+      const page = await api.getPage<DocumentRow>("/documents", at);
+      // Deleting the last row on a page would otherwise strand the user on an
+      // empty one, so step back when the page comes up empty.
+      if (page.items.length === 0 && at > 0) return refresh(Math.max(0, at - PAGE_SIZE));
+      setDocs(page.items);
+      setTotal(page.total);
+      setOffset(at);
+    } catch (err) { setError(err instanceof ApiError ? err.message : "failed to load"); }
   }
 
-  useEffect(() => { refresh(); }, []);
+  useEffect(() => { refresh(0); }, []);
 
   async function onUpload(e: ChangeEvent<HTMLInputElement>) {
     const files = Array.from(e.target.files ?? []);
@@ -60,8 +70,8 @@ export function Sources({ isAdmin }: { isAdmin: boolean }) {
 
       <div className="card">
         <div className="spread">
-          <h2>Documents ({docs.length})</h2>
-          <button onClick={refresh}>Refresh</button>
+          <h2>Documents ({total})</h2>
+          <button onClick={() => refresh()}>Refresh</button>
         </div>
         {error && <p className="error">{error}</p>}
         {docs.length === 0 ? (
@@ -94,6 +104,7 @@ export function Sources({ isAdmin }: { isAdmin: boolean }) {
             </table>
           </div>
         )}
+        <Pager offset={offset} total={total} count={docs.length} onChange={(n) => refresh(n)} />
       </div>
     </div>
   );

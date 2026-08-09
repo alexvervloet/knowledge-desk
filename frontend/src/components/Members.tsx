@@ -1,9 +1,15 @@
 import { FormEvent, useEffect, useState } from "react";
-import { ApiError, Group, GroupMember, Me, Member, Role, api } from "../api";
+import { ApiError, Group, GroupMember, Me, Member, PAGE_SIZE, Role, api } from "../api";
+import { Pager } from "./Pager";
 
 export function Members({ me }: { me: Me }) {
   const [members, setMembers] = useState<Member[]>([]);
+  const [total, setTotal] = useState(0);
+  const [offset, setOffset] = useState(0);
   const [groups, setGroups] = useState<Group[]>([]);
+  // The group picker needs every member, not just the visible page. Capped at
+  // the API maximum; an org past that needs a search box rather than a select.
+  const [allMembers, setAllMembers] = useState<Member[]>([]);
   const [error, setError] = useState("");
 
   // add-member form
@@ -16,13 +22,18 @@ export function Members({ me }: { me: Me }) {
   const [openGroup, setOpenGroup] = useState<string | null>(null);
   const [groupMembers, setGroupMembers] = useState<GroupMember[]>([]);
 
-  async function load() {
+  async function load(at = offset) {
     try {
-      setMembers(await api.get<Member[]>("/members"));
+      const page = await api.getPage<Member>("/members", at);
+      if (page.items.length === 0 && at > 0) return load(Math.max(0, at - PAGE_SIZE));
+      setMembers(page.items);
+      setTotal(page.total);
+      setOffset(at);
       setGroups(await api.get<Group[]>("/groups"));
+      setAllMembers((await api.getPage<Member>("/members", 0, 500)).items);
     } catch (err) { setError(err instanceof ApiError ? err.message : "failed to load"); }
   }
-  useEffect(() => { load(); }, []);
+  useEffect(() => { load(0); }, []);
 
   function wrap(fn: () => Promise<unknown>) {
     setError("");
@@ -46,7 +57,7 @@ export function Members({ me }: { me: Me }) {
   return (
     <div>
       <div className="card">
-        <h2>Members</h2>
+        <h2>Members ({total})</h2>
         {error && <p className="error">{error}</p>}
         <div style={{ overflowX: "auto" }}>
           <table>
@@ -79,6 +90,8 @@ export function Members({ me }: { me: Me }) {
             </tbody>
           </table>
         </div>
+
+        <Pager offset={offset} total={total} count={members.length} onChange={(n) => load(n)} />
 
         <form className="row" style={{ marginTop: "0.75rem" }} onSubmit={addMember}>
           <input placeholder="email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} required style={{ flex: "2 1 160px" }} />
@@ -116,7 +129,7 @@ export function Members({ me }: { me: Me }) {
                   <div className="row" style={{ marginTop: "0.3rem" }}>
                     <select id={`add-${g.id}`} defaultValue="">
                       <option value="" disabled>add member...</option>
-                      {members.map((m) => <option key={m.id} value={m.email}>{m.email}</option>)}
+                      {allMembers.map((m) => <option key={m.id} value={m.email}>{m.email}</option>)}
                     </select>
                     <button onClick={() => {
                       const sel = document.getElementById(`add-${g.id}`) as HTMLSelectElement;

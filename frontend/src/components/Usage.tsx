@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
-import { ApiError, AuditRow, Usage as UsageT, api } from "../api";
+import { ApiError, AuditRow, PAGE_SIZE, Usage as UsageT, api } from "../api";
+import { Pager } from "./Pager";
 
 function Meter({ used, cap }: { used: number; cap: number }) {
   const pct = cap > 0 ? Math.min(100, (used / cap) * 100) : 0;
@@ -19,13 +20,23 @@ function kb(bytes: number) {
 export function Usage() {
   const [usage, setUsage] = useState<UsageT | null>(null);
   const [audit, setAudit] = useState<AuditRow[]>([]);
+  const [total, setTotal] = useState(0);
+  const [offset, setOffset] = useState(0);
   const [error, setError] = useState("");
+
+  async function loadAudit(at: number) {
+    const page = await api.getPage<AuditRow>("/audit", at);
+    if (page.items.length === 0 && at > 0) return loadAudit(Math.max(0, at - PAGE_SIZE));
+    setAudit(page.items);
+    setTotal(page.total);
+    setOffset(at);
+  }
 
   useEffect(() => {
     (async () => {
       try {
         setUsage(await api.get<UsageT>("/usage"));
-        setAudit(await api.get<AuditRow[]>("/audit"));
+        await loadAudit(0);
       } catch (err) { setError(err instanceof ApiError ? err.message : "failed to load"); }
     })();
   }, []);
@@ -71,7 +82,7 @@ export function Usage() {
       </div>
 
       <div className="card">
-        <h2>Recent activity</h2>
+        <h2>Recent activity ({total})</h2>
         <div style={{ overflowX: "auto" }}>
           <table>
             <thead><tr><th>When</th><th>Actor</th><th>Action</th></tr></thead>
@@ -86,6 +97,7 @@ export function Usage() {
             </tbody>
           </table>
         </div>
+        <Pager offset={offset} total={total} count={audit.length} onChange={(n) => { loadAudit(n).catch(() => setError("failed to load")); }} />
       </div>
     </div>
   );
