@@ -34,6 +34,10 @@ app.add_middleware(
     allow_origins=settings.cors_origins,
     allow_methods=["*"],
     allow_headers=["*"],
+    # The SPA reads the paging total from a response header, which a browser
+    # hides on cross-origin replies unless it is exposed. Same-origin in prod,
+    # cross-origin against the dev server.
+    expose_headers=["X-Total-Count"],
 )
 
 _KNOWN_COLLECTIONS = {"demo"}
@@ -136,10 +140,12 @@ def add_member(
 
 @app.get("/members")
 def list_members(
+    response: Response,
     scope: Annotated[TenantScope, Depends(current_scope)],
     limit: int = Query(default=100, ge=1, le=500),
     offset: int = Query(default=0, ge=0),
 ) -> list[dict]:
+    response.headers["X-Total-Count"] = str(scope.count_members())
     return scope.list_members(limit, offset)
 
 
@@ -271,10 +277,12 @@ def upload_folder(
 
 @app.get("/documents")
 def list_documents(
+    response: Response,
     scope: Annotated[TenantScope, Depends(current_scope)],
     limit: int = Query(default=100, ge=1, le=500),
     offset: int = Query(default=0, ge=0),
 ) -> list[dict]:
+    response.headers["X-Total-Count"] = str(scope.count_documents())
     return scope.list_documents(limit, offset)
 
 
@@ -378,12 +386,14 @@ def ask(req: AskRequest, scope: Annotated[TenantScope, Depends(current_scope)]):
 
 @app.get("/audit")
 def audit_log(
+    response: Response,
     scope: Annotated[TenantScope, Depends(current_scope)],
     limit: int = Query(default=100, ge=1, le=500),
     offset: int = Query(default=0, ge=0),
 ) -> list[dict]:
     """Recent audit events for the caller's org. Admin only."""
     scope.require_role("admin")
+    response.headers["X-Total-Count"] = str(scope.count_audit())
     return scope.list_audit(limit, offset)
 
 
