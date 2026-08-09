@@ -357,3 +357,45 @@ Takeaway: automation that creates work is only half an automation. When you add 
 bot, add the thing that resolves its output in the same change, and pick the
 trigger that matches your existing workflow instead of reshaping the workflow
 around the tool.
+
+## 22. The managed database's default role bypasses your security model
+
+Deploying to Neon, the obvious shortcut was to point the application at the role
+the provider hands you, `neondb_owner`, and skip provisioning a second one. I had
+even written that option into the runbook as an acceptable simplification, on the
+reasoning that FORCE row-level security covers table owners. Checking before
+deploying rather than after showed `rolbypassrls = true` on that role. Pointing
+the app at it would have disabled RLS in production completely: no error, no
+failing test, the local suite still green because local Postgres hands out a role
+without that attribute. The entire third layer of tenant isolation would have
+been silently absent in the only environment that matters.
+
+The fix was the thing the design already called for, a dedicated `kd_app` role
+with only the privileges it needs, and the verification is now part of the deploy:
+query `rolbypassrls` for both roles, then connect as the app role with no tenant
+context and confirm it reads zero rows from the real production database.
+
+Takeaway: a security control that depends on the connecting role's attributes is
+only as true as the role you actually connect with, and managed providers pick
+that role for you. Inspect `rolsuper` and `rolbypassrls` on every environment
+before trusting RLS, and make the deploy prove the deny rather than assuming it
+carried over from your laptop.
+
+## 23. Production is a different interpreter, and it says so
+
+Two problems appeared within minutes of the first deploy, and both came from the
+environment rather than the code. The seed script finished its work and then
+crashed with `PythonFinalizationError`, because the connection pool's finalizer
+tries to join worker threads and Python 3.14 refuses that at interpreter
+shutdown; local dev was still on 3.13, where the same code exits quietly. And the
+Neon connection string, pasted into an interactive Keychain prompt, was truncated
+at exactly 128 characters, which surfaced as a baffling parser error about a
+query parameter rather than anything resembling "your input was cut off".
+
+Neither was caught by CI, because CI had been testing on 3.13 while the image
+shipped 3.14, a gap that only opened when the base-image bump landed. Aligning
+the CI runtime to the image was the actual fix; the pool close was the symptom.
+
+Takeaway: test on the interpreter you deploy on, or you are testing a different
+program. And when a value arrives mangled, check its length against a round
+number before debugging the parser.

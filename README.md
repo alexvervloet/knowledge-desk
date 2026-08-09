@@ -111,7 +111,24 @@ After `python -m knowledge_desk.seed` (password `demo-password-123`):
 | globex | owner@globex.test |
 
 Each org's documents are non-overlapping, so a question in one org can never
-retrieve the other's content. Public URL: pending deploy.
+retrieve the other's content.
+
+## Live demo
+
+**https://knowledge-desk.fly.dev**
+
+Log in with either account below (password `demo-password-123`) and ask
+"how long do refunds take?" in both. Acme answers it with a citation; Globex
+retrieves only its own documents and says it has nothing it is allowed to cite.
+That refusal is the whole point of the project.
+
+| org | email |
+|---|---|
+| acme | owner@acme.test |
+| globex | owner@globex.test |
+
+Running with real Claude answers and Voyage embeddings. The machine sleeps when
+idle, so the first request after a quiet period pays a cold start.
 
 Tenant isolation is enforced in three layers: the data layer's `org_id` filter,
 the ACL-aware candidate fetch in retrieval, and Postgres row-level security
