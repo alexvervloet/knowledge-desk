@@ -145,7 +145,7 @@ def _main() -> int:
 
     # The plan is the real evidence: a warm sequential scan can still look fast.
     with connect(org_id) as conn:
-        from pgvector.psycopg import Vector
+        from pgvector import Vector
 
         principals = scope.principals()
         vec = Vector(_rand_vec(rng))
