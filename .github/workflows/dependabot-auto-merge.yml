@@ -1,0 +1,69 @@
+name: dependabot auto-merge
+
+# Dependabot opens PRs but nothing merges them, so they pile up until a human
+# notices. This closes the loop for the low-risk half: patch and minor updates
+# merge once CI is green. Major bumps are left open on purpose, because in this
+# repo they have needed judgment every time (coupled peer deps, a moved import,
+# a base image outrunning a dependency).
+#
+# Triggered on ci completion rather than on pull_request, and it merges only
+# after seeing a successful run. The obvious alternative, `gh pr merge --auto`,
+# only waits when the branch has required status checks, which would mean adding
+# branch protection and giving up direct pushes to main.
+
+on:
+  workflow_run:
+    workflows: ["ci"]
+    types: [completed]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  auto-merge:
+    if: >
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'pull_request' &&
+      github.event.workflow_run.actor.login == 'dependabot[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Find the pull request for this run
+        id: pr
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SHA: ${{ github.event.workflow_run.head_sha }}
+          REPO: ${{ github.repository }}
+        run: |
+          num=$(gh api "repos/$REPO/commits/$SHA/pulls" \
+                  --jq '[.[] | select(.state=="open")][0].number // empty')
+          echo "number=$num" >> "$GITHUB_OUTPUT"
+
+      - name: Check the update type
+        id: meta
+        if: steps.pr.outputs.number != ''
+        uses: dependabot/fetch-metadata@v2
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          # fetch-metadata reads the PR referenced here rather than the event.
+          pr-number: ${{ steps.pr.outputs.number }}
+
+      - name: Merge patch and minor updates
+        if: >
+          steps.pr.outputs.number != '' &&
+          steps.meta.outputs.update-type != 'version-update:semver-major'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+        run: gh pr merge "${{ steps.pr.outputs.number }}" --repo "$REPO" --squash --delete-branch
+
+      - name: Leave majors for review
+        if: >
+          steps.pr.outputs.number != '' &&
+          steps.meta.outputs.update-type == 'version-update:semver-major'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+        run: |
+          gh pr comment "${{ steps.pr.outputs.number }}" --repo "$REPO" --body \
+            "CI is green, but this is a major bump so it is left for manual review. Before merging, check for coupled peers (react and react-dom must move together) and for moved imports (pgvector relocated \`Vector\` in 0.5.0)."
