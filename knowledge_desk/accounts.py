@@ -160,6 +160,38 @@ def delete_session(raw_token: str) -> None:
         )
 
 
+def change_password(
+    user_id: str, current_password: str, new_password: str, keep_token_hash: str
+) -> int:
+    """Replace a user's password after verifying the current one. Returns how
+    many of their other sessions were revoked.
+
+    Self-service only, and deliberately so: an admin who could reset another
+    member's password could reset an owner's and log in as them, which is the
+    privilege escalation the role-grant ceiling closed, arriving through a
+    different door. Changing a password is something only its owner can do.
+
+    Every other session for the user is revoked, because the usual reason to
+    change a password is that someone else might know it. The caller's own
+    session survives, so changing it does not log you out of the tab you are in.
+    """
+    with connect() as conn:
+        row = conn.execute(
+            "select password_hash from users where id = %s", (user_id,)
+        ).fetchone()
+        if row is None or not verify_password(current_password, row["password_hash"]):
+            raise AuthError("current password is incorrect")
+        conn.execute(
+            "update users set password_hash = %s where id = %s",
+            (hash_password(new_password), user_id),
+        )
+        revoked = conn.execute(
+            "delete from sessions where user_id = %s and token_hash <> %s",
+            (user_id, keep_token_hash),
+        )
+    return revoked.rowcount
+
+
 def purge_expired_sessions() -> int:
     """Delete sessions that are past their expiry. Returns how many went.
 

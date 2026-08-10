@@ -16,6 +16,7 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
 from knowledge_desk import __version__, accounts, assistant, audit, retrieval, tracing
+from knowledge_desk.auth import hash_token
 from knowledge_desk.bodylimit import BodySizeLimitMiddleware
 from knowledge_desk.config import settings
 from knowledge_desk.deps import (
@@ -126,6 +127,31 @@ def me(ctx: Annotated[AuthContext, Depends(current_ctx)]) -> dict:
         "org_id": ctx.org_id,
         "role": ctx.role,
     }
+
+
+class ChangePasswordRequest(BaseModel):
+    current_password: str = Password
+    new_password: str = Password
+
+
+@app.post("/me/password", status_code=status.HTTP_204_NO_CONTENT)
+def change_password(
+    req: ChangePasswordRequest,
+    ctx: Annotated[AuthContext, Depends(current_ctx)],
+    token: Annotated[str, Depends(bearer_token)],
+    _: Annotated[None, Depends(auth_rate_limit)] = None,
+) -> Response:
+    """Change your own password. Throttled like the other credential routes,
+    because it verifies one. Revokes the caller's other sessions and keeps the
+    one making the request."""
+    if req.new_password == req.current_password:
+        raise HTTPException(status_code=400, detail="new password must differ")
+    revoked = accounts.change_password(
+        ctx.user_id, req.current_password, req.new_password, hash_token(token)
+    )
+    audit.log(ctx.org_id, ctx.user_id, "user.password_changed",
+              {"sessions_revoked": revoked})
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 # --- members --------------------------------------------------------------
