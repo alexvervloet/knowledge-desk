@@ -13,6 +13,7 @@ from __future__ import annotations
 import base64
 import hashlib
 import secrets
+from functools import cache
 
 import bcrypt
 
@@ -34,6 +35,20 @@ def verify_password(password: str, password_hash: str) -> bool:
         return bcrypt.checkpw(_prehash(password), password_hash.encode("ascii"))
     except ValueError:
         return False
+
+
+@cache
+def dummy_hash() -> str:
+    """A real bcrypt hash of a value nothing can log in with.
+
+    Verifying against this on the user-not-found path is what stops login from
+    answering "does this account exist" through its own response time. Skipping
+    bcrypt when there is no user made a miss finish in about 4ms against roughly
+    240ms for a hit, which is a clean oracle needing no error-message difference
+    to read. Cached because generating it costs exactly as much as the
+    verification it is standing in for.
+    """
+    return hash_password(secrets.token_urlsafe(32))
 
 
 def new_session_token() -> tuple[str, str]:

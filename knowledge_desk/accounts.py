@@ -13,6 +13,7 @@ from datetime import UTC, datetime, timedelta
 import psycopg
 
 from knowledge_desk.auth import (
+    dummy_hash,
     hash_password,
     hash_token,
     new_session_token,
@@ -84,7 +85,12 @@ def authenticate(email: str, password: str, org_slug: str | None = None) -> Auth
         user = conn.execute(
             "select id, password_hash from users where email = %s", (email,)
         ).fetchone()
-        if user is None or not verify_password(password, user["password_hash"]):
+        if user is None:
+            # Spend the same bcrypt time a real account would, so the response
+            # time does not disclose whether the email is registered.
+            verify_password(password, dummy_hash())
+            raise AuthError("invalid email or password")
+        if not verify_password(password, user["password_hash"]):
             raise AuthError("invalid email or password")
         memberships = conn.execute(
             "select m.org_id, m.role, o.slug from memberships m"
