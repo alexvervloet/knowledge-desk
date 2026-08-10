@@ -11,6 +11,10 @@ single address. And role checks belong to that scope rather than to these
 handlers, so a route added later cannot skip one by forgetting to ask; the
 exception is `DELETE /org`, which is an account operation rather than a scoped
 one, and says so where it sits.
+
+Request and response bodies live in schemas.py, so what this file shows is the
+shape of the API: one function per endpoint, and what each of them is allowed
+to do.
 """
 
 from __future__ import annotations
@@ -21,7 +25,6 @@ from typing import Annotated
 from fastapi import Depends, FastAPI, HTTPException, Query, Response, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel, Field
 
 from knowledge_desk import __version__, accounts, assistant, audit, retrieval, tracing
 from knowledge_desk.auth import hash_token
@@ -35,6 +38,21 @@ from knowledge_desk.deps import (
     register_error_handlers,
 )
 from knowledge_desk.ratelimit import limiter
+from knowledge_desk.schemas import (
+    AddGroupMemberRequest,
+    AddMemberRequest,
+    AskRequest,
+    ChangePasswordRequest,
+    CreateGroupRequest,
+    FeedbackRequest,
+    FolderUploadRequest,
+    LoginRequest,
+    SearchRequest,
+    SetRoleRequest,
+    SignupRequest,
+    TokenResponse,
+    UpdateAclRequest,
+)
 from knowledge_desk.tenancy import AuthContext, TenantScope
 
 app = FastAPI(title="Knowledge Desk", version=__version__)
@@ -55,11 +73,6 @@ app.add_middleware(
     expose_headers=["X-Total-Count"],
 )
 
-Slug = Field(pattern=r"^[a-z0-9][a-z0-9-]{1,38}[a-z0-9]$")
-Password = Field(min_length=8, max_length=200)
-Role = Field(pattern=r"^(owner|admin|member)$")
-
-
 # --- health ---------------------------------------------------------------
 
 
@@ -69,25 +82,6 @@ def healthz() -> dict:
 
 
 # --- auth -----------------------------------------------------------------
-
-
-class SignupRequest(BaseModel):
-    org_slug: str = Slug
-    org_name: str = Field(min_length=1, max_length=100)
-    email: str = Field(min_length=3, max_length=200)
-    password: str = Password
-
-
-class LoginRequest(BaseModel):
-    email: str = Field(min_length=3, max_length=200)
-    password: str = Password
-    org_slug: str | None = None
-
-
-class TokenResponse(BaseModel):
-    token: str
-    org_id: str
-    role: str
 
 
 @app.post("/auth/signup", status_code=status.HTTP_201_CREATED, response_model=TokenResponse)
@@ -128,11 +122,6 @@ def me(ctx: Annotated[AuthContext, Depends(current_ctx)]) -> dict:
     }
 
 
-class ChangePasswordRequest(BaseModel):
-    current_password: str = Password
-    new_password: str = Password
-
-
 @app.post("/me/password", status_code=status.HTTP_204_NO_CONTENT)
 def change_password(
     req: ChangePasswordRequest,
@@ -154,12 +143,6 @@ def change_password(
 
 
 # --- members --------------------------------------------------------------
-
-
-class AddMemberRequest(BaseModel):
-    email: str = Field(min_length=3, max_length=200)
-    password: str = Password
-    role: str = Role
 
 
 @app.post("/members", status_code=status.HTTP_201_CREATED)
@@ -184,10 +167,6 @@ def list_members(
     return scope.list_members(limit, offset)
 
 
-class SetRoleRequest(BaseModel):
-    role: str = Role
-
-
 @app.patch("/members/{user_id}")
 def set_member_role(
     user_id: str, req: SetRoleRequest, scope: Annotated[TenantScope, Depends(current_scope)]
@@ -208,14 +187,6 @@ def remove_member(
 
 
 # --- groups ---------------------------------------------------------------
-
-
-class CreateGroupRequest(BaseModel):
-    name: str = Field(min_length=1, max_length=100)
-
-
-class AddGroupMemberRequest(BaseModel):
-    email: str = Field(min_length=3, max_length=200)
 
 
 @app.post("/groups", status_code=status.HTTP_201_CREATED)
@@ -276,16 +247,6 @@ def remove_group_member(
 LOCAL_FOLDER_SOURCE = "local-folder"
 
 
-class UploadedDocument(BaseModel):
-    path: str = Field(min_length=1, max_length=1024)
-    content: str = Field(max_length=1_000_000)
-    acl: list[str] | None = None
-
-
-class FolderUploadRequest(BaseModel):
-    documents: list[UploadedDocument] = Field(max_length=1000)
-
-
 @app.post("/sources/folder", status_code=status.HTTP_202_ACCEPTED)
 def upload_folder(
     req: FolderUploadRequest, scope: Annotated[TenantScope, Depends(current_scope)]
@@ -317,10 +278,6 @@ def delete_document(
     scope.delete_document(document_id)
     audit.log(scope.org_id, scope.ctx.user_id, "document.deleted", {"document_id": document_id})
     return Response(status_code=status.HTTP_204_NO_CONTENT)
-
-
-class UpdateAclRequest(BaseModel):
-    acl: list[str] = Field(max_length=200)
 
 
 @app.patch("/documents/{document_id}/acl")
@@ -355,11 +312,6 @@ def delete_org(scope: Annotated[TenantScope, Depends(current_scope)]) -> Respons
 # --- retrieval ------------------------------------------------------------
 
 
-class SearchRequest(BaseModel):
-    query: str = Field(min_length=1, max_length=500)
-    k: int = Field(default=5, ge=1, le=50)
-
-
 @app.post("/search")
 def search(
     req: SearchRequest, scope: Annotated[TenantScope, Depends(current_scope)]
@@ -371,11 +323,6 @@ def search(
 
 
 # --- assistant ------------------------------------------------------------
-
-
-class AskRequest(BaseModel):
-    question: str = Field(min_length=1, max_length=500)
-    k: int | None = Field(default=None, ge=1, le=50)
 
 
 @app.post("/ask")
@@ -422,12 +369,6 @@ def audit_log(
 def usage(scope: Annotated[TenantScope, Depends(current_scope)]) -> dict:
     """Org usage against its caps, for the admin dashboard. Admin only."""
     return scope.usage_summary()
-
-
-class FeedbackRequest(BaseModel):
-    answer_id: str
-    rating: str = Field(pattern=r"^(up|down)$")
-    note: str | None = Field(default=None, max_length=2000)
 
 
 @app.post("/feedback", status_code=status.HTTP_201_CREATED)
