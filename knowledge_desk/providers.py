@@ -73,8 +73,24 @@ def _render_context(contexts: list[dict[str, Any]]) -> str:
     )
 
 
+def _estimate_tokens(text: str) -> int:
+    """Rough token count for usage the provider never got to report. Four
+    characters per token is the usual English approximation; this only ever
+    feeds a budget estimate, never a bill."""
+    return len(text) // 4
+
+
 class MockAnswerProvider:
     name = "mock"
+
+    def estimate(
+        self, question: str, contexts: list[dict[str, Any]], answer: str
+    ) -> dict[str, Any]:
+        return {
+            "input_tokens": _estimate_tokens(_render_context(contexts) + question),
+            "output_tokens": _estimate_tokens(answer),
+            "cost_usd": 0.0,  # the mock calls nothing, so it costs nothing
+        }
 
     def stream(
         self, question: str, contexts: list[dict[str, Any]]
@@ -104,6 +120,17 @@ class ClaudeAnswerProvider:
 
         self._client = anthropic.Anthropic(api_key=settings.anthropic_api_key)
         self._model = settings.answer_model
+
+    def estimate(
+        self, question: str, contexts: list[dict[str, Any]], answer: str
+    ) -> dict[str, Any]:
+        input_tokens = _estimate_tokens(_render_context(contexts) + question + _SYSTEM)
+        output_tokens = _estimate_tokens(answer)
+        return {
+            "input_tokens": input_tokens,
+            "output_tokens": output_tokens,
+            "cost_usd": _cost(self._model, input_tokens, output_tokens),
+        }
 
     def stream(
         self, question: str, contexts: list[dict[str, Any]]
