@@ -131,7 +131,7 @@ class AddMemberRequest(BaseModel):
 def add_member(
     req: AddMemberRequest, scope: Annotated[TenantScope, Depends(current_scope)]
 ) -> dict:
-    scope.require_role("admin")
+    scope.require_can_grant(req.role)
     user_id = accounts.add_member(scope.org_id, req.email, req.password, req.role)
     audit.log(scope.org_id, scope.ctx.user_id, "member.added",
               {"user_id": user_id, "role": req.role})

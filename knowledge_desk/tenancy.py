@@ -45,6 +45,20 @@ class TenantScope:
         if not role_at_least(self.ctx.role, minimum):
             raise Forbidden(f"requires role {minimum}, caller is {self.ctx.role}")
 
+    def require_can_grant(self, role: str) -> None:
+        """Gate a role assignment: admin or better, and never a role above the
+        caller's own rank.
+
+        Handing out a role you do not hold is privilege escalation with an extra
+        step. An admin who can create an owner also picks that account's
+        password, so they log in as it and hold every owner power, including the
+        irreversible `DELETE /org`. The rank ceiling is what makes "admins manage
+        members, owners manage ownership" true at the API and not just in the UI.
+        """
+        self.require_role("admin")
+        if not role_at_least(self.ctx.role, role):
+            raise Forbidden(f"cannot grant role {role}, caller is {self.ctx.role}")
+
     # --- groups -----------------------------------------------------------
 
     def list_groups(self) -> list[dict[str, Any]]:
@@ -138,8 +152,9 @@ class TenantScope:
 
     def set_member_role(self, user_id: str, role: str) -> None:
         """Change a member's role. You cannot change your own role (avoids
-        self-lockout), and the org must always keep at least one owner."""
-        self.require_role("admin")
+        self-lockout), you cannot grant a role above your own, and the org must
+        always keep at least one owner."""
+        self.require_can_grant(role)
         if user_id == self.ctx.user_id:
             raise Forbidden("you cannot change your own role")
         with connect(self.org_id) as conn:
