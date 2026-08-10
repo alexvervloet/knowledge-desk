@@ -323,6 +323,23 @@ is a security incident.
   tweak.
 - **As a general chatbot.** It has no conversation memory. Every question is
   independent, so follow-ups like "what about the second one?" have no referent.
+- **On account lifecycle.** There is no password change, no reset, and no way for
+  a member to replace the temporary password the admin who added them chose. A
+  leaked credential is revoked by removing the membership, which is a blunt
+  instrument. Sessions last 30 days and expired rows are never reaped.
+- **On abuse, beyond the controls that are there.** An audit pass in August 2026
+  found the operational limits thorough on the authenticated path and thin around
+  it, and the gaps it found are fixed: login and signup are throttled and no
+  longer disclose which emails have accounts, a spend ceiling now bounds the whole
+  deployment rather than each org, and a stream the client abandons is billed for
+  what it generated instead of nothing. What remains uncovered is worth naming.
+  Uploads are validated after the request body is buffered, so a large rejected
+  upload still costs memory. A document dropped from a sync keeps its content in
+  the table while no longer counting against the storage quota. The rate limiter
+  is per process, so running more than one API process multiplies every limit by
+  the process count. None of these are exploitable across a tenant boundary, which
+  is the line this project actually defends, but they are the reason the limits
+  here are sized for a demo rather than a paying tenant.
 
 ## If you extend one thing
 
