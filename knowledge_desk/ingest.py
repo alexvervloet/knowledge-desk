@@ -122,7 +122,12 @@ def process_ingest_document(org_id: str, payload: dict[str, Any]) -> None:
 
     with connect(org_id) as conn:
         conn.execute("delete from chunks where document_id = %s", (document_id,))
-        for ordinal, (text, embedding) in enumerate(zip(texts, embeddings, strict=False)):
+        # strict: a short embedding list would otherwise truncate silently, and
+        # the document would be marked ingested holding a subset of its chunks.
+        # That is a permanent, invisible hole in retrieval for that document,
+        # and nothing downstream would ever see a reason to retry. Raising sends
+        # it back through the queue and eventually dead-letters it visibly.
+        for ordinal, (text, embedding) in enumerate(zip(texts, embeddings, strict=True)):
             # acl is denormalized from the parent document so that access-scoped
             # vector search can filter and order on the same relation (see
             # migration 0010). update_document_acl keeps the copies in sync.
