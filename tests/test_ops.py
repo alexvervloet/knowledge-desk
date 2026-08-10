@@ -6,17 +6,19 @@ log an admin can read.
 
 import json
 import time
+from concurrent.futures import ThreadPoolExecutor
 from unittest import mock
 
 import pytest
 from fastapi.testclient import TestClient
 
-from knowledge_desk import assistant, ingest
+from knowledge_desk import accounts, assistant, ingest
 from knowledge_desk.config import settings
 from knowledge_desk.db import connect
+from knowledge_desk.errors import QuotaExceeded
 from knowledge_desk.main import app
 from knowledge_desk.providers import MockAnswerProvider
-from knowledge_desk.ratelimit import auth_limiter
+from knowledge_desk.ratelimit import TokenBucketLimiter, auth_limiter
 from knowledge_desk.tenancy import AuthContext, TenantScope
 
 client = TestClient(app)
@@ -201,6 +203,61 @@ def test_login_costs_the_same_whether_or_not_the_account_exists():
     # Generous bound: the point is that one is not an order of magnitude faster,
     # not that a shared CI runner produces stable timings.
     assert 0.5 < unknown / known < 2.0, f"known={known:.3f}s unknown={unknown:.3f}s"
+
+
+def test_idle_rate_limit_buckets_are_evicted():
+    """One entry per key, kept for the life of the process, is a slow leak. A
+    bucket idle long enough has refilled to full, so it is indistinguishable
+    from a key never seen and there is nothing to lose by dropping it."""
+    clock = [0.0]
+    limiter = TokenBucketLimiter(clock=lambda: clock[0])
+    for i in range(1200):
+        limiter.check(f"key-{i}")
+    assert len(limiter._buckets) == 1200
+
+    clock[0] += TokenBucketLimiter._EVICT_AFTER_SECONDS + 1
+    limiter.check("someone-new")
+    assert len(limiter._buckets) == 1, "idle buckets should be gone"
+
+
+def test_expired_sessions_are_purged():
+    token = signup("acme", "o@acme.test")
+    with connect() as conn:
+        conn.execute("update sessions set expires_at = now() - interval '1 day'")
+
+    assert client.get("/me", headers=auth(token)).status_code == 401  # already refused
+    assert accounts.purge_expired_sessions() == 1
+    with connect() as conn:
+        assert conn.execute("select count(*) as n from sessions").fetchone()["n"] == 0
+
+
+def test_concurrent_uploads_cannot_both_pass_the_same_cap(monkeypatch):
+    """The cap was read in one transaction and the write happened in another, so
+    two uploads could each see room only one of them had. The check now runs
+    inside the write transaction behind a lock on the org row."""
+    monkeypatch.setattr(settings, "org_doc_cap", 10)
+    token = signup("acme", "o@acme.test")
+    me = client.get("/me", headers=auth(token)).json()
+    scope = TenantScope(AuthContext(me["user_id"], me["org_id"], me["role"], me["email"]))
+
+    docs = [{"path": f"a{i}.txt", "content": "x"} for i in range(6)]
+    other = [{"path": f"b{i}.txt", "content": "x"} for i in range(6)]
+    results = []
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        futures = [pool.submit(scope.sync_source, f"src-{n}", d)
+                   for n, d in enumerate((docs, other))]
+        for f in futures:
+            try:
+                results.append(f.result())
+            except QuotaExceeded:
+                results.append("rejected")
+
+    assert "rejected" in results, "6 + 6 documents cannot both fit under a cap of 10"
+    with connect(scope.org_id) as conn:
+        total = conn.execute(
+            "select count(*) as n from documents where org_id = %s", (scope.org_id,)
+        ).fetchone()["n"]
+    assert total <= 10
 
 
 # --- ingest storage cap ----------------------------------------------------
