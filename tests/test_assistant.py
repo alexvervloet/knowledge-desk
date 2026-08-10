@@ -143,6 +143,35 @@ def answer_id_for(token: str, question: str) -> str:
     return _by_type(ask(token, question), "meta")[0]["answer_id"]
 
 
+def test_provider_failure_does_not_leak_internals_to_the_caller(monkeypatch, caplog):
+    """The broad catch is right — a provider failure must not become a 500 in
+    the middle of a stream — but it used to put str(exc) straight into the frame
+    the browser renders, so a database error handed the caller its host name and
+    the role it connected as."""
+    leaky = ("connection to db-internal-7.prod failed:"
+             " password authentication failed for user 'kd_app'")
+
+    class Boom:
+        name = "claude"
+
+        def stream(self, question, contexts):
+            raise RuntimeError(leaky)
+            yield  # pragma: no cover - makes this a generator
+
+    token = signup("acme", "o@acme.test")
+    upload(token, [{"path": "d.txt", "content": SECRET, "acl": ["public-to-org"]}])
+    monkeypatch.setattr("knowledge_desk.assistant.get_answer_provider", Boom)
+
+    with caplog.at_level("ERROR", logger="knowledge_desk"):
+        events = ask(token, SECRET)
+    message = next(e for e in events if e["type"] == "error")["message"]
+
+    assert "db-internal-7.prod" not in message and "kd_app" not in message
+    # The caller gets a handle that ties their report to the logged detail.
+    reference = message.split("reference ")[1].split()[0]
+    assert reference in caplog.text and leaky in caplog.text
+
+
 def test_feedback_records_once_per_user():
     token = signup("acme", "o@acme.test")
     aid = answer_id_for(token, "hello?")

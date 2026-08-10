@@ -8,7 +8,7 @@ from fastapi.testclient import TestClient
 
 from knowledge_desk import ingest
 from knowledge_desk.db import connect
-from knowledge_desk.embeddings import EMBED_FAIL_MARKER
+from knowledge_desk.embeddings import EMBED_FAIL_MARKER, MockEmbedder
 from knowledge_desk.main import app
 
 client = TestClient(app)
@@ -127,6 +127,25 @@ def test_poison_document_dead_letters_without_wedging_queue():
             "select count(*) as n from jobs where status = 'dead'"
         ).fetchone()["n"]
     assert dead == 1
+
+
+def test_short_embedding_batch_fails_instead_of_dropping_chunks(monkeypatch):
+    """An embedder that returns fewer vectors than it was given texts used to be
+    zipped short: the document was marked ingested holding a subset of its
+    chunks, with nothing anywhere to say the rest were missing. That is a
+    permanent, invisible hole in retrieval, so it must fail loudly instead."""
+    class ShortEmbedder:
+        def embed_documents(self, texts):
+            return MockEmbedder().embed_documents(texts)[:-1]  # one vector short
+
+    token = signup("acme", "o@acme.test")
+    upload(token, [{"path": "long.txt", "content": "para " * 2000}])  # several chunks
+    monkeypatch.setattr(ingest, "get_embedder", ShortEmbedder)
+    drain_until_settled()
+
+    doc = docs_by_path(token)["long.txt"]
+    assert doc["status"] == "failed"
+    assert doc["chunk_count"] == 0, "a partial document must not be left queryable"
 
 
 # --- tenant guarantees ----------------------------------------------------
