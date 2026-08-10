@@ -10,8 +10,11 @@ and for Voyage a network call) off the request and behind the retrying queue.
 from __future__ import annotations
 
 import hashlib
+from collections.abc import Callable
 from typing import Any
 
+import psycopg
+from psycopg.rows import DictRow
 from psycopg.types.json import Json
 
 from knowledge_desk import jobs, pii
@@ -27,17 +30,27 @@ def _hash(content: str) -> str:
 
 
 def sync_documents(
-    org_id: str, source: str, items: list[dict[str, Any]]
+    org_id: str,
+    source: str,
+    items: list[dict[str, Any]],
+    precheck: Callable[[psycopg.Connection[DictRow]], None] | None = None,
 ) -> dict[str, int]:
     """Reconcile an org's documents for one source against `items` (each with
     path, content, and optional acl). Enqueues an ingest job per new/changed
     document, leaves unchanged ones alone, and marks missing ones deleted.
+
+    `precheck` runs inside the write transaction, before anything is written, so
+    a caller enforcing a quota can lock and measure without another transaction
+    slipping in between the measurement and the write. Raising from it aborts
+    the whole sync.
     """
     enqueued = unchanged = 0
     incoming_paths = {item["path"] for item in items}
-    to_enqueue: list[tuple[str, str]] = []  # (document_id, content_hash)
+    to_enqueue: list[tuple[str, str]] = []  # (document_id, idempotency suffix)
 
     with connect(org_id) as conn:
+        if precheck is not None:
+            precheck(conn)
         existing = {
             r["path"]: r
             for r in conn.execute(
@@ -129,21 +142,29 @@ def process_ingest_document(org_id: str, payload: dict[str, Any]) -> None:
     texts = chunk_text(doc["content"])
     embeddings = get_embedder().embed_documents(texts) if texts else []
 
+    # strict: a short embedding list would otherwise truncate silently, and the
+    # document would be marked ingested holding a subset of its chunks. That is
+    # a permanent, invisible hole in retrieval for that document, and nothing
+    # downstream would ever see a reason to retry. Raising sends it back through
+    # the queue and eventually dead-letters it visibly.
+    #
+    # acl is denormalized from the parent document so that access-scoped vector
+    # search can filter and order on the same relation (see migration 0010).
+    # update_document_acl keeps the copies in sync.
+    rows = [
+        (org_id, document_id, ordinal, text, embedding, Json(doc["acl"]))
+        for ordinal, (text, embedding) in enumerate(zip(texts, embeddings, strict=True))
+    ]
+
     with connect(org_id) as conn:
         conn.execute("delete from chunks where document_id = %s", (document_id,))
-        # strict: a short embedding list would otherwise truncate silently, and
-        # the document would be marked ingested holding a subset of its chunks.
-        # That is a permanent, invisible hole in retrieval for that document,
-        # and nothing downstream would ever see a reason to retry. Raising sends
-        # it back through the queue and eventually dead-letters it visibly.
-        for ordinal, (text, embedding) in enumerate(zip(texts, embeddings, strict=True)):
-            # acl is denormalized from the parent document so that access-scoped
-            # vector search can filter and order on the same relation (see
-            # migration 0010). update_document_acl keeps the copies in sync.
-            conn.execute(
+        if rows:
+            # One round trip rather than one per chunk. COPY would be faster
+            # still and is not available: RLS forbids it (see LESSONS #15).
+            conn.cursor().executemany(
                 "insert into chunks(org_id, document_id, ordinal, text, embedding, acl)"
                 " values (%s, %s, %s, %s, %s, %s)",
-                (org_id, document_id, ordinal, text, embedding, Json(doc["acl"])),
+                rows,
             )
         conn.execute(
             "update documents set status = 'ingested', updated_at = now() where id = %s",

@@ -205,13 +205,30 @@ class TenantScope:
         can only over-protect.
         """
         self.require_role("admin")
-        usage = self.storage_usage()
         incoming_bytes = sum(len(i["content"].encode("utf-8")) for i in items)
-        if usage["bytes"] + incoming_bytes > settings.org_storage_bytes_cap:
-            raise QuotaExceeded("org storage cap exceeded")
-        if usage["docs"] + len(items) > settings.org_doc_cap:
-            raise QuotaExceeded("org document cap exceeded")
-        return ingest.sync_documents(self.org_id, source, items)
+
+        def check_caps(conn: psycopg.Connection[DictRow]) -> None:
+            """Runs inside the transaction that does the writing.
+
+            Reading usage and then writing in a separate transaction let two
+            concurrent uploads each see room that only one of them could have,
+            and both pass a cap neither should have. Locking the org row holds
+            the answer still until the documents land. Serializing on the tenant
+            is cheap here: uploads are rare and already slow.
+            """
+            conn.execute("select 1 from orgs where id = %s for update", (self.org_id,))
+            usage = require_row(conn.execute(
+                "select count(*) as docs,"
+                " coalesce(sum(octet_length(content)), 0) as bytes"
+                " from documents where org_id = %s and status <> 'deleted'",
+                (self.org_id,),
+            ).fetchone())
+            if int(usage["bytes"]) + incoming_bytes > settings.org_storage_bytes_cap:
+                raise QuotaExceeded("org storage cap exceeded")
+            if int(usage["docs"]) + len(items) > settings.org_doc_cap:
+                raise QuotaExceeded("org document cap exceeded")
+
+        return ingest.sync_documents(self.org_id, source, items, precheck=check_caps)
 
     def count_documents(self) -> int:
         """Total documents in the org, for the X-Total-Count header. A separate
@@ -365,6 +382,18 @@ class TenantScope:
     # --- answers and feedback --------------------------------------------
 
     def record_answer(self, question: str, provider: str, refused: bool) -> str:
+        """Store a question and what answered it.
+
+        The question text is stored as asked, unlike audit-log detail, which is
+        PII-redacted before it is written. The asymmetry is deliberate: an audit
+        entry is metadata about an action, where a stray email address is
+        incidental and redacting it costs nothing, while a question *is* the
+        content — redacting it would leave `top_queries` showing
+        "[REDACTED-EMAIL]" and make an answer impossible to trace back to what
+        was asked. Anyone who can read these is already an admin of the org the
+        asker belongs to. It is worth knowing that this is where user-typed text
+        accumulates in the clear.
+        """
         with connect(self.org_id) as conn:
             row = require_row(conn.execute(
                 "insert into answers(org_id, user_id, question, provider, refused)"
