@@ -21,6 +21,7 @@ from fastapi.testclient import TestClient
 from knowledge_desk import ingest
 from knowledge_desk.config import settings
 from knowledge_desk.main import app
+from knowledge_desk.ratelimit import auth_limiter
 
 client = TestClient(app)
 
@@ -36,6 +37,9 @@ def _reset() -> None:
     with psycopg.connect(settings.database_url) as conn:
         conn.execute(f"truncate {_ALL_TABLES} cascade")
         conn.commit()
+    # Every eval signs up and logs in from the same client address, so the auth
+    # limiter has to start each one fresh or the gate throttles itself.
+    auth_limiter.reset()
 
 
 def _headers(token: str) -> dict:

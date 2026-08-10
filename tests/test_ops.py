@@ -5,6 +5,7 @@ log an admin can read.
 """
 
 import json
+import time
 
 import pytest
 from fastapi.testclient import TestClient
@@ -13,6 +14,7 @@ from knowledge_desk import ingest
 from knowledge_desk.config import settings
 from knowledge_desk.db import connect
 from knowledge_desk.main import app
+from knowledge_desk.ratelimit import auth_limiter
 
 client = TestClient(app)
 
@@ -117,6 +119,61 @@ def test_rate_limit_is_per_user(monkeypatch):
     # The owner is now rate-limited, but the member has an independent bucket.
     assert client.post("/ask", headers=auth(owner), json={"question": "hi"}).status_code == 429
     assert client.post("/ask", headers=auth(dev), json={"question": "hi"}).status_code == 200
+
+
+# --- auth rate limit and the timing oracle ---------------------------------
+
+
+def test_login_is_throttled(monkeypatch):
+    monkeypatch.setattr(settings, "auth_rate_burst", 3)
+    monkeypatch.setattr(settings, "auth_rate_per_min", 1)  # negligible refill
+    signup("acme", "o@acme.test")
+    auth_limiter.reset()  # signup consumed a token from the same bucket
+    bad = {"email": "o@acme.test", "password": "wrongbutlongenough"}
+    codes = [client.post("/auth/login", json=bad).status_code for _ in range(4)]
+    assert codes == [401, 401, 401, 429]
+
+
+def test_signup_is_throttled(monkeypatch):
+    """The per-org spend and question caps are only a bound if orgs are not free
+    to mint, so the signup route needs the same throttle as login."""
+    monkeypatch.setattr(settings, "auth_rate_burst", 2)
+    monkeypatch.setattr(settings, "auth_rate_per_min", 1)
+    codes = [
+        client.post("/auth/signup", json={
+            "org_slug": f"org-{i}", "org_name": "O", "email": f"o{i}@x.test", "password": PW,
+        }).status_code
+        for i in range(3)
+    ]
+    assert codes == [201, 201, 429]
+
+
+def test_auth_limit_is_independent_of_the_ask_limit(monkeypatch):
+    monkeypatch.setattr(settings, "auth_rate_burst", 1)
+    monkeypatch.setattr(settings, "auth_rate_per_min", 1)
+    token = signup("acme", "o@acme.test")
+    # Signup exhausted the auth bucket, but asking is a separate limiter.
+    assert client.post("/auth/login", json={"email": "o@acme.test", "password": PW}).status_code == 429
+    assert client.post("/ask", headers=auth(token), json={"question": "hi"}).status_code == 200
+
+
+def test_login_costs_the_same_whether_or_not_the_account_exists():
+    """A miss used to skip bcrypt entirely, so response time answered "does this
+    email have an account" — roughly 4ms against 240ms. Both paths must hash."""
+    signup("acme", "o@acme.test")
+    bad = "wrongbutlongenough"
+
+    def timed(email: str) -> float:
+        auth_limiter.reset()
+        start = time.perf_counter()
+        assert client.post("/auth/login", json={"email": email, "password": bad}).status_code == 401
+        return time.perf_counter() - start
+
+    known = min(timed("o@acme.test") for _ in range(3))
+    unknown = min(timed("nobody@acme.test") for _ in range(3))
+    # Generous bound: the point is that one is not an order of magnitude faster,
+    # not that a shared CI runner produces stable timings.
+    assert 0.5 < unknown / known < 2.0, f"known={known:.3f}s unknown={unknown:.3f}s"
 
 
 # --- ingest storage cap ----------------------------------------------------
