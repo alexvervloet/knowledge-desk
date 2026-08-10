@@ -8,6 +8,7 @@ from fastapi.testclient import TestClient
 from knowledge_desk import ingest
 from knowledge_desk.db import connect
 from knowledge_desk.main import app
+from knowledge_desk.tenancy import TenantScope
 
 client = TestClient(app)
 
@@ -104,6 +105,41 @@ def test_export_returns_members_and_documents():
     export = client.get("/org/export", headers=auth(token)).json()
     assert any(m["email"] == "o@acme.test" for m in export["members"])
     assert any(d["path"] == "a.txt" for d in export["documents"])
+
+
+def test_export_is_complete_past_the_default_page_size():
+    """The export must not inherit the listings' pagination default.
+
+    export() used to call list_documents() bare, so a tenant with more than 100
+    documents got a well-formed export containing 100 of them and no indication
+    that the rest were missing.
+    """
+    token = signup("acme", "o@acme.test")
+    # Enqueued, not drained: the export lists documents whatever their status,
+    # and embedding 120 of them would only make the test slow.
+    paths = [f"doc{i:03}.txt" for i in range(120)]
+    client.post("/sources/folder", headers=auth(token),
+                json={"documents": [{"path": p, "content": p} for p in paths]})
+
+    export = client.get("/org/export", headers=auth(token)).json()
+    assert {d["path"] for d in export["documents"]} == set(paths)
+
+
+def test_export_sweep_pages_to_exhaustion(monkeypatch):
+    """The sweep keeps fetching until a short page arrives, including when the
+    row count is an exact multiple of the page size (the off-by-one that would
+    otherwise drop the final page or loop forever)."""
+    monkeypatch.setattr(TenantScope, "_SWEEP_PAGE", 2)
+    token = signup("acme", "o@acme.test")
+    for i in range(3):  # 4 members total with the owner: an exact multiple of 2
+        add_member(token, f"m{i}@acme.test")
+    paths = [f"d{i}.txt" for i in range(5)]  # not a multiple of 2
+    client.post("/sources/folder", headers=auth(token),
+                json={"documents": [{"path": p, "content": p} for p in paths]})
+
+    export = client.get("/org/export", headers=auth(token)).json()
+    assert len(export["members"]) == 4
+    assert {d["path"] for d in export["documents"]} == set(paths)
 
 
 def test_export_requires_admin():
