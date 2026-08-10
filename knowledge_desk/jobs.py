@@ -2,6 +2,16 @@
 `SELECT ... FOR UPDATE SKIP LOCKED` gives at-least-once delivery with safe
 concurrent workers, which is all Phase 2 needs. Jobs are idempotent by their
 `idempotency_key`, so enqueuing the same unit of work twice is a no-op.
+
+On row-level security: `jobs` carries an `org_id` and is the one such table
+without an RLS policy, which is deliberate and worth stating because every other
+org-scoped table has one. A worker claims the next due job without knowing whose
+it is — that is the whole point of a shared queue — so it cannot set the tenant
+GUC before the claim, and a policy here would make the queue unreadable to the
+only process that drains it. The isolation that matters happens after the claim:
+the job's `org_id` becomes the tenant context for the work itself, so
+`process_ingest_document` runs inside the same RLS the API does. A job row holds
+a document id, never document content.
 """
 
 from __future__ import annotations
