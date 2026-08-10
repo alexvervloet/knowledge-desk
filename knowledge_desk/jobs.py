@@ -1,6 +1,6 @@
 """A durable, Postgres-backed job queue. No Redis: a `jobs` table plus
 `SELECT ... FOR UPDATE SKIP LOCKED` gives at-least-once delivery with safe
-concurrent workers, which is all Phase 2 needs. Jobs are idempotent by their
+concurrent workers, which is all ingestion needs. Jobs are idempotent by their
 `idempotency_key`, so enqueuing the same unit of work twice is a no-op.
 
 On row-level security: `jobs` carries an `org_id` and is the one such table

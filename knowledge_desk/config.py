@@ -33,7 +33,7 @@ class Settings(BaseSettings):
     session_ttl_hours: int = 720
 
     # Frontend dev server origins allowed to call the API cross-origin. In prod
-    # the UI is served same-origin (Phase 8), so this only matters for `npm run dev`.
+    # the UI is served same-origin from the API, so this only matters for `npm run dev`.
     cors_origins: list[str] = ["http://localhost:5173"]
 
     # Serve the built SPA from the API (same-origin) in the container. Off by

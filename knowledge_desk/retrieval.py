@@ -1,7 +1,7 @@
 """Retrieval: embed a query and fetch the nearest chunks the caller is allowed
 to see. The access control lives in TenantScope.search; this module only turns
-text into a query vector and hands it over. Phase 4's assistant answers on top
-of these results.
+text into a query vector and hands it over. The assistant answers on top of
+these results.
 """
 
 from __future__ import annotations

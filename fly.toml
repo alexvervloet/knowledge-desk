@@ -2,7 +2,8 @@
 # UI) and a worker process (the background embedder). Migrations run once per
 # deploy via the release command, so the processes never race to migrate.
 #
-# Deploying is a [Alex] step (account + cost). See the runbook in PLAN.md.
+# Deploying is a [Alex] step (account + cost). See the deployment section of
+# WALKTHROUGH.md, and LESSONS.md #22 on the managed database's default role.
 
 app = "knowledge-desk"
 primary_region = "iad"

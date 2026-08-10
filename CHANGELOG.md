@@ -9,11 +9,15 @@ follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); the categories
 are the standard ones, and **Security** means a change to what an attacker can
 do, not merely a change to security-adjacent code.
 
+The migration files carry phase numbers in their comments as a record of when
+each was written. The sections below name which phases those were.
+
 ## 2026-08-10 — Audit remediation
 
 An audit of code quality, resilience, security, structure, and documentation
-raised seventeen findings. This covers seven of them, each reproduced against
-the running app before the fix and re-checked after.
+raised seventeen findings. All of them are addressed here, each reproduced
+against the running app before the fix and re-checked after, along with one bug
+the audit missed that surfaced while fixing another.
 
 ### Security
 
@@ -55,8 +59,50 @@ the running app before the fix and re-checked after.
   marked `ingested` while holding a subset of its chunks — a permanent hole in
   retrieval, invisible at every layer, that nothing downstream would ever see a
   reason to retry. It now raises, so the job retries and dead-letters visibly.
+- Re-ingest a document that comes back after being dropped. Ingest jobs are
+  idempotent by document and content hash, and dropping a document deletes its
+  chunks, so re-uploading the identical file produced the identical key,
+  collided with the succeeded job from before the deletion, and enqueued
+  nothing — leaving the document at `pending` with no chunks, permanently
+  invisible to retrieval. Found while fixing the storage leak below rather than
+  by the audit. A revision counter, bumped when chunks are destroyed, expresses
+  what the content hash could not.
+- Release a dropped document's bytes. The row kept its text while
+  `storage_usage` stopped counting it, so upload-then-drop in a loop grew the
+  database without limit while the usage meter read zero, and content a tenant
+  believed they had deleted was still there.
+- Enforce the storage caps inside the write transaction. They were read in one
+  transaction and the documents written in another, so two concurrent uploads
+  could each see room only one of them had.
+- Evict idle rate-limiter buckets, which were kept for the life of the process,
+  one per user id or client address.
 
 ### Added
+
+- `POST /me/password`, and an Account tab in the UI. There was no way to change
+  a password at all, so a member added by an admin was stuck with whatever that
+  admin chose. Self-service only, deliberately: an admin who could reset an
+  owner's password could sign in as them. Changing it revokes the user's other
+  sessions and keeps the caller's own.
+- A request body size limit at the ASGI layer (`MAX_REQUEST_BYTES`), applied
+  before the body is read. The upload caps were enforced only after FastAPI had
+  parsed the whole request, so a 60 MB payload against a 50 MB cap took peak RSS
+  from 66 MB to 373 MB before returning its 413. Measured after: no growth.
+- Expired session purging, run hourly from the worker.
+
+### Changed
+
+- Every role gate moved into `TenantScope`. They had been split between the
+  route layer and the data layer with no rule saying which lived where, so
+  reading `main.py` gave a wrong picture of the authorization model — the exact
+  property the tenancy design exists to avoid. Six of ten admin-only operations
+  were unguarded when called as a method rather than through their endpoint.
+  `DELETE /org` keeps its gate at the route, being an account operation rather
+  than a scoped one, and says so.
+- Chunk inserts use one `executemany` instead of a round trip per chunk.
+- Documented two deliberate asymmetries that had looked accidental: why `jobs`
+  is the one `org_id`-carrying table without an RLS policy, and why question
+  text is stored unredacted while audit detail is not.
 
 - `platform_spend`, a deployment-wide daily spend total, and
   `PLATFORM_DAILY_BUDGET_USD` to cap it. Every existing cost control was scoped
@@ -69,8 +115,6 @@ the running app before the fix and re-checked after.
   header names where to read the caller's address behind a proxy, where the
   socket peer is the proxy and every visitor would otherwise share one bucket.
 
-### Changed
-
 - The public demo caps a day's spend at $3.00 regardless of how many orgs are
   created, and throttles auth to a burst of 5.
 - `LESSONS.md` gains entries 24–28: a UI-only rule is not a rule, a default
@@ -81,6 +125,10 @@ the running app before the fix and re-checked after.
 - `WALKTHROUGH.md`'s "Where it will disappoint you" now names the operational
   limits alongside the product ones, including what this pass deliberately did
   not fix.
+
+### Removed
+
+- `GET /collections/{name}`, Phase 0 scaffolding that nothing called.
 
 ## 2026-08-09 — Deployment and dependency maintenance
 

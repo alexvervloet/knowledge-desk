@@ -1,7 +1,7 @@
 """The assistant: retrieve within the caller's permissions, then stream a
 grounded answer. If retrieval returns nothing the caller may see, it refuses
-rather than answering from the model's own knowledge, so the Phase 3 access
-boundary carries all the way through to the generated answer.
+rather than answering from the model's own knowledge, so the access boundary
+enforced in retrieval carries all the way through to the generated answer.
 
 `answer_stream` yields event dicts the API renders as SSE frames:
   {"type": "meta", "answer_id": ..., "provider": ...}
