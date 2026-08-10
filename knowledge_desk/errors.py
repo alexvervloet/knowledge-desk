@@ -21,3 +21,7 @@ class Forbidden(DomainError):
 
 class AuthError(DomainError):
     """Bad or missing credentials (maps to 401)."""
+
+
+class QuotaExceeded(DomainError):
+    """A tenant limit would be exceeded by this request (maps to 413)."""

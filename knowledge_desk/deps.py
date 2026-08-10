@@ -12,7 +12,14 @@ from fastapi.responses import JSONResponse
 
 from knowledge_desk import accounts
 from knowledge_desk.config import settings
-from knowledge_desk.errors import AuthError, Conflict, DomainError, Forbidden, NotFound
+from knowledge_desk.errors import (
+    AuthError,
+    Conflict,
+    DomainError,
+    Forbidden,
+    NotFound,
+    QuotaExceeded,
+)
 from knowledge_desk.ratelimit import auth_limiter
 from knowledge_desk.tenancy import AuthContext, TenantScope
 
@@ -72,6 +79,7 @@ _STATUS = {
     Forbidden: 403,
     NotFound: 404,
     Conflict: 409,
+    QuotaExceeded: 413,
 }
 
 
