@@ -6,15 +6,18 @@ log an admin can read.
 
 import json
 import time
+from unittest import mock
 
 import pytest
 from fastapi.testclient import TestClient
 
-from knowledge_desk import ingest
+from knowledge_desk import assistant, ingest
 from knowledge_desk.config import settings
 from knowledge_desk.db import connect
 from knowledge_desk.main import app
+from knowledge_desk.providers import MockAnswerProvider
 from knowledge_desk.ratelimit import auth_limiter
+from knowledge_desk.tenancy import AuthContext, TenantScope
 
 client = TestClient(app)
 
@@ -202,9 +205,73 @@ def test_answer_records_usage():
     aid = next(e for e in ask_events(token, "the sky is blue today") if e["type"] == "meta")["answer_id"]
     with connect(org_of(token)) as conn:
         row = conn.execute(
-            "select output_tokens, refused, blocked from answers where id = %s", (aid,)
+            "select output_tokens, refused, blocked, usage_estimated"
+            " from answers where id = %s", (aid,)
         ).fetchone()
     assert row["output_tokens"] > 0 and not row["refused"] and not row["blocked"]
+    assert row["usage_estimated"] is False  # reported by the provider, not inferred
+
+
+# --- billing a stream that does not finish ---------------------------------
+
+
+def _answer_row(token: str, answer_id: str) -> dict:
+    with connect(org_of(token)) as conn:
+        return conn.execute(
+            "select input_tokens, output_tokens, cost_usd, usage_estimated"
+            " from answers where id = %s", (answer_id,)
+        ).fetchone()
+
+
+def _scope_for(token: str):
+    me = client.get("/me", headers=auth(token)).json()
+    return TenantScope(AuthContext(me["user_id"], me["org_id"], me["role"], me["email"]))
+
+
+def test_abandoned_stream_is_still_billed():
+    """A client that disconnects before the final usage frame used to leave the
+    row at zero tokens and zero dollars, so the budget never advanced even
+    though the model had already generated. Aborting every request just before
+    the end was a way to spend without ever being billed."""
+    token = signup("acme", "o@acme.test")
+    upload(token, [{"path": "doc.txt", "content": "the sky is blue today", "acl": ["public-to-org"]}])
+
+    stream = assistant.answer_stream(_scope_for(token), "the sky is blue today", 5)
+    answer_id = next(e for e in stream if e["type"] == "meta")["answer_id"]
+    next(e for e in stream if e["type"] == "token")  # consume one token, then walk away
+    stream.close()
+
+    row = _answer_row(token, answer_id)
+    assert row["output_tokens"] > 0, "an abandoned stream must still book what it consumed"
+    assert row["usage_estimated"] is True
+
+
+def test_a_stream_that_never_reaches_the_model_is_not_billed():
+    """The estimate is keyed on having streamed something, so a refusal — where
+    no provider call happens at all — must not invent a charge."""
+    token = signup("acme", "o@acme.test")
+    events = ask_events(token, "nothing here matches this")
+    answer_id = next(e for e in events if e["type"] == "meta")["answer_id"]
+
+    row = _answer_row(token, answer_id)
+    assert (row["input_tokens"], row["output_tokens"], row["cost_usd"]) == (0, 0, 0.0)
+    assert row["usage_estimated"] is False
+
+
+def test_abandoned_stream_counts_toward_the_org_budget():
+    """The point of billing it: the spend the budget sees must move."""
+    token = signup("acme", "o@acme.test")
+    upload(token, [{"path": "doc.txt", "content": "the sky is blue today", "acl": ["public-to-org"]}])
+    scope = _scope_for(token)
+
+    # The mock provider is free, so price the estimate to prove the wiring.
+    with_cost = {"input_tokens": 100, "output_tokens": 50, "cost_usd": 0.25}
+    stream = assistant.answer_stream(scope, "the sky is blue today", 5)
+    next(e for e in stream if e["type"] == "token")
+    with mock.patch.object(MockAnswerProvider, "estimate", return_value=with_cost):
+        stream.close()
+
+    assert scope.spend_last_24h() == pytest.approx(0.25)
 
 
 # --- audit log -------------------------------------------------------------
