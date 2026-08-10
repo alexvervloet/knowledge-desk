@@ -15,7 +15,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
-from knowledge_desk import __version__, accounts, assistant, audit, ingest, retrieval, tracing
+from knowledge_desk import __version__, accounts, assistant, audit, retrieval, tracing
 from knowledge_desk.bodylimit import BodySizeLimitMiddleware
 from knowledge_desk.config import settings
 from knowledge_desk.deps import (
@@ -268,19 +268,8 @@ def upload_folder(
     """Reconcile an org's local-folder documents and enqueue ingest jobs for the
     ones that changed. Returns immediately (202); the worker does the embedding.
     """
-    scope.require_role("admin")
     items = [d.model_dump() for d in req.documents]
-
-    # Enforce per-org caps before enqueuing any embedding work. Conservative:
-    # an update counts toward the incoming total, which can only over-protect.
-    usage = scope.storage_usage()
-    incoming_bytes = sum(len(d.content.encode("utf-8")) for d in req.documents)
-    if usage["bytes"] + incoming_bytes > settings.org_storage_bytes_cap:
-        raise HTTPException(status_code=413, detail="org storage cap exceeded")
-    if usage["docs"] + len(req.documents) > settings.org_doc_cap:
-        raise HTTPException(status_code=413, detail="org document cap exceeded")
-
-    result = ingest.sync_documents(scope.org_id, LOCAL_FOLDER_SOURCE, items)
+    result = scope.sync_source(LOCAL_FOLDER_SOURCE, items)
     audit.log(scope.org_id, scope.ctx.user_id, "source.synced", result)
     return result
 
@@ -300,7 +289,6 @@ def list_documents(
 def delete_document(
     document_id: str, scope: Annotated[TenantScope, Depends(current_scope)]
 ) -> Response:
-    scope.require_role("admin")
     scope.delete_document(document_id)
     audit.log(scope.org_id, scope.ctx.user_id, "document.deleted", {"document_id": document_id})
     return Response(status_code=status.HTTP_204_NO_CONTENT)
@@ -327,7 +315,6 @@ def update_document_acl(
 
 @app.get("/org/export")
 def export_org(scope: Annotated[TenantScope, Depends(current_scope)]) -> dict:
-    scope.require_role("admin")
     return scope.export()
 
 
@@ -335,8 +322,8 @@ def export_org(scope: Annotated[TenantScope, Depends(current_scope)]) -> dict:
 def delete_org(scope: Annotated[TenantScope, Depends(current_scope)]) -> Response:
     """Delete the whole tenant. Owner only, and irreversible: cascades to every
     org-scoped table."""
-    scope.require_role("owner")
-    accounts.delete_org(scope.org_id)
+    scope.require_role("owner")  # only gate not in the scope: deleting an org
+    accounts.delete_org(scope.org_id)  # is an account operation, not a scoped one
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
@@ -402,7 +389,6 @@ def audit_log(
     offset: int = Query(default=0, ge=0),
 ) -> list[dict]:
     """Recent audit events for the caller's org. Admin only."""
-    scope.require_role("admin")
     response.headers["X-Total-Count"] = str(scope.count_audit())
     return scope.list_audit(limit, offset)
 
@@ -410,7 +396,6 @@ def audit_log(
 @app.get("/usage")
 def usage(scope: Annotated[TenantScope, Depends(current_scope)]) -> dict:
     """Org usage against its caps, for the admin dashboard. Admin only."""
-    scope.require_role("admin")
     return scope.usage_summary()
 
 

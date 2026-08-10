@@ -18,10 +18,11 @@ from pgvector import Vector
 from psycopg.rows import DictRow
 from psycopg.types.json import Json
 
+from knowledge_desk import ingest
 from knowledge_desk.auth import role_at_least
 from knowledge_desk.config import settings
 from knowledge_desk.db import connect, require_row
-from knowledge_desk.errors import Conflict, Forbidden, NotFound
+from knowledge_desk.errors import Conflict, Forbidden, NotFound, QuotaExceeded
 
 
 @dataclass(frozen=True)
@@ -194,6 +195,24 @@ class TenantScope:
 
     # --- documents --------------------------------------------------------
 
+    def sync_source(self, source: str, items: list[dict[str, Any]]) -> dict[str, int]:
+        """Reconcile one source's documents for this org, enforcing the storage
+        caps first. Admin only.
+
+        The caps live here rather than in the route because they are a property
+        of the tenant, and because this is the layer a new caller reaches for.
+        Conservative on updates: an edit counts toward the incoming total, which
+        can only over-protect.
+        """
+        self.require_role("admin")
+        usage = self.storage_usage()
+        incoming_bytes = sum(len(i["content"].encode("utf-8")) for i in items)
+        if usage["bytes"] + incoming_bytes > settings.org_storage_bytes_cap:
+            raise QuotaExceeded("org storage cap exceeded")
+        if usage["docs"] + len(items) > settings.org_doc_cap:
+            raise QuotaExceeded("org document cap exceeded")
+        return ingest.sync_documents(self.org_id, source, items)
+
     def count_documents(self) -> int:
         """Total documents in the org, for the X-Total-Count header. A separate
         query rather than a window function over the page, because the page is
@@ -205,6 +224,9 @@ class TenantScope:
             ).fetchone())["n"]
 
     def list_documents(self, limit: int = 100, offset: int = 0) -> list[dict[str, Any]]:
+        # Open to every member on purpose: seeing which documents the org holds
+        # is not the same as being able to read them, and the Sources tab is for
+        # everyone. Retrieval is what enforces the ACL, per document.
         with connect(self.org_id) as conn:
             return conn.execute(
                 "select d.id, d.path, d.source, d.status, d.content_hash,"
@@ -217,8 +239,10 @@ class TenantScope:
             ).fetchall()
 
     def delete_document(self, document_id: str) -> None:
-        """Delete a document and everything derived from it. Chunks cascade via
-        the foreign key; the ACL lives on the document row, so it goes too."""
+        """Delete a document and everything derived from it. Admin only. Chunks
+        cascade via the foreign key; the ACL lives on the document row, so it
+        goes too."""
+        self.require_role("admin")
         with connect(self.org_id) as conn:
             row = conn.execute(
                 "delete from documents where id = %s and org_id = %s returning id",
@@ -247,7 +271,8 @@ class TenantScope:
 
     def export(self) -> dict[str, Any]:
         """A portable snapshot of the org's members and documents (metadata, not
-        raw content). Backs the tenant data-export requirement."""
+        raw content). Admin only. Backs the tenant data-export requirement."""
+        self.require_role("admin")
         return {
             "members": self._sweep(self.list_members),
             "documents": self._sweep(self.list_documents),
@@ -419,6 +444,7 @@ class TenantScope:
         return {"docs": int(row["docs"]), "bytes": int(row["bytes"])}
 
     def count_audit(self) -> int:
+        self.require_role("admin")
         with connect(self.org_id) as conn:
             return require_row(conn.execute(
                 "select count(*) as n from audit_log where org_id = %s",
@@ -426,6 +452,8 @@ class TenantScope:
             ).fetchone())["n"]
 
     def list_audit(self, limit: int = 100, offset: int = 0) -> list[dict[str, Any]]:
+        """Recent audit events for this org. Admin only."""
+        self.require_role("admin")
         with connect(self.org_id) as conn:
             return conn.execute(
                 "select a.action, a.detail, a.created_at, u.email as actor"
@@ -446,7 +474,9 @@ class TenantScope:
 
     def usage_summary(self) -> dict[str, Any]:
         """Everything the usage dashboard needs: volume and cost against their
-        caps, storage against its cap, and the month's top questions."""
+        caps, storage against its cap, and the month's top questions. Admin
+        only."""
+        self.require_role("admin")
         storage = self.storage_usage()
         return {
             "questions": {
