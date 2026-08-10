@@ -27,7 +27,7 @@ client = TestClient(app)
 
 _ALL_TABLES = (
     "orgs, users, memberships, groups, group_members, sessions,"
-    " documents, chunks, jobs, answers, feedback, audit_log"
+    " documents, chunks, jobs, answers, feedback, audit_log, platform_spend"
 )
 SECRET = "the passphrase is copper-moon-42"
 PW = "pw-supersecret"

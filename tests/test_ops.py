@@ -124,6 +124,30 @@ def test_rate_limit_is_per_user(monkeypatch):
     assert client.post("/ask", headers=auth(dev), json={"question": "hi"}).status_code == 200
 
 
+def test_platform_budget_blocks_an_org_that_is_under_its_own(monkeypatch):
+    """Per-org caps bound one tenant, not the bill: signup is open, so a fresh
+    org comes with a fresh budget. The deployment-wide ceiling is the number
+    that actually bounds a day's spend, and it has to bite a brand new org that
+    has not spent a cent of its own allowance."""
+    monkeypatch.setattr(settings, "platform_daily_budget_usd", 1.0)
+    spent = signup("acme", "o@acme.test")
+    _scope_for(spent).finalize_answer(
+        _answered_id(spent), input_tokens=1, output_tokens=1, cost_usd=1.5,
+    )
+
+    # A different org, untouched budget of its own.
+    fresh = signup("globex", "o@globex.test")
+    assert _scope_for(fresh).spend_last_24h() == 0.0
+    events = ask_events(fresh, "anything at all")
+    error = next(e for e in events if e["type"] == "error")
+    assert "service daily budget exhausted" in error["message"]
+
+
+def _answered_id(token: str) -> str:
+    """Ask once and return the answer row's id, so a test has something to bill."""
+    return next(e for e in ask_events(token, "seed the ledger") if e["type"] == "meta")["answer_id"]
+
+
 # --- auth rate limit and the timing oracle ---------------------------------
 
 

@@ -9,7 +9,12 @@ from knowledge_desk.config import settings
 from knowledge_desk.migrate import apply_pending
 from knowledge_desk.ratelimit import auth_limiter, limiter
 
-_DOMAIN_TABLES = "orgs, users, memberships, groups, group_members, sessions"
+# Truncating orgs cascades to everything that references it. platform_spend is
+# listed separately because it deliberately has no org_id, so nothing cascades to
+# it and a test's spend would otherwise carry into the next one.
+_DOMAIN_TABLES = (
+    "orgs, users, memberships, groups, group_members, sessions, platform_spend"
+)
 
 
 @pytest.fixture(scope="session")
