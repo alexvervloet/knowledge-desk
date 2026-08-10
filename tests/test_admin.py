@@ -3,11 +3,15 @@ group membership management (including the remove-from-group API deferred from
 Phase 3), document ACL editing, and the usage summary.
 """
 
+import uuid
+
 import pytest
 from fastapi.testclient import TestClient
 
 from knowledge_desk import ingest
+from knowledge_desk.errors import Forbidden
 from knowledge_desk.main import app
+from knowledge_desk.tenancy import AuthContext, TenantScope
 
 client = TestClient(app)
 
@@ -136,6 +140,53 @@ def test_owner_can_still_grant_ownership():
     co = add_member(owner, "co2@acme.test")
     assert client.patch(f"/members/{co}", headers=auth(owner),
                         json={"role": "owner"}).status_code == 200
+
+
+# --- where authorization lives ---------------------------------------------
+
+
+ADMIN_ONLY_SCOPE_CALLS = [
+    ("sync_source", lambda s: s.sync_source("local-folder", [])),
+    ("delete_document", lambda s: s.delete_document(str(uuid.uuid4()))),
+    ("update_document_acl", lambda s: s.update_document_acl(str(uuid.uuid4()), [])),
+    ("export", lambda s: s.export()),
+    ("count_audit", lambda s: s.count_audit()),
+    ("list_audit", lambda s: s.list_audit()),
+    ("usage_summary", lambda s: s.usage_summary()),
+    ("create_group", lambda s: s.create_group("g")),
+    ("delete_group", lambda s: s.delete_group(str(uuid.uuid4()))),
+    ("remove_member", lambda s: s.remove_member(str(uuid.uuid4()))),
+]
+
+
+@pytest.mark.parametrize("name,call", ADMIN_ONLY_SCOPE_CALLS, ids=[n for n, _ in ADMIN_ONLY_SCOPE_CALLS])
+def test_admin_only_operations_are_gated_in_the_data_layer(name, call):
+    """Role checks used to be split between the route layer and the data layer,
+    with no rule saying which lived where, so reading main.py gave a wrong
+    picture of the authorization model. They are all in TenantScope now, which
+    is the layer a new route cannot bypass — so the gate has to hold when the
+    method is called directly, not only through its endpoint."""
+    owner = signup("acme", "o@acme.test")
+    add_member(owner, "dev@acme.test")
+    me = client.get("/me", headers=auth(login("dev@acme.test", "acme"))).json()
+    member_scope = TenantScope(AuthContext(me["user_id"], me["org_id"], "member", me["email"]))
+
+    with pytest.raises(Forbidden):
+        call(member_scope)
+
+
+def test_document_listing_is_open_to_members_on_purpose():
+    """The one listing with no role gate. Seeing which documents the org holds
+    is not the same as being able to read them: retrieval enforces the ACL per
+    document, and the Sources tab is for everyone."""
+    owner = signup("acme", "o@acme.test")
+    client.post("/sources/folder", headers=auth(owner),
+                json={"documents": [{"path": "a.txt", "content": "hello",
+                                     "acl": ["public-to-org"]}]})
+    ingest.run_pending()
+    add_member(owner, "dev@acme.test")
+    dev = login("dev@acme.test", "acme")
+    assert client.get("/documents", headers=auth(dev)).status_code == 200
 
 
 # --- group management ------------------------------------------------------
