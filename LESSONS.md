@@ -524,3 +524,32 @@ from the code that has to check it.
 Takeaway: for every quota, ask what the unit is and how expensive that unit is to
 create. A per-X limit only bounds anything if X is scarce, and if X is created by
 an open endpoint, the real limit has to be global.
+
+## 29. Clearing the dead field exposed the dead code path
+
+Dropping a document from a sync marked it deleted and left its text in the row.
+Two things were wrong with that at once, and only the first was obvious: the
+storage query excludes deleted rows, so those bytes stopped counting against the
+tenant's quota while staying on disk, and content someone believed they had
+deleted was still sitting in a column.
+
+Clearing the text was a two-word change. It also broke a test that had never
+been written, because nothing had ever checked the sequence *upload, drop,
+upload the same file again*. Ingest jobs are idempotent by
+`ingest:{document_id}:{content_hash}`, which is exactly what makes a resync of
+unchanged files nearly free. Dropping a document deletes its chunks, so the
+identical file re-uploaded produced the identical key, collided with the
+**succeeded** job from before the deletion, and enqueued nothing at all. The
+document sat at `pending` with zero chunks, permanently absent from retrieval,
+looking entirely normal in the listing apart from a status nobody reads.
+
+That bug predates the change and an audit had already gone past it. What found
+it was writing the follow-up test — "does the tombstone still work?" — which
+existed only because clearing the content made me wonder whether resync still
+compared the right thing. It does; the idempotency key did not.
+
+Takeaway: an idempotency key encodes an assumption that the previous run's
+output still exists. When any path deletes that output, the key needs a
+generation counter, or the queue will confidently skip work it has undone. And
+the test worth writing after a small change is the one that asks what *else*
+depended on the thing you changed.
