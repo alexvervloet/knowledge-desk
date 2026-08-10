@@ -69,22 +69,31 @@ def sync_documents(
                 " content = excluded.content, content_hash = excluded.content_hash,"
                 " acl = excluded.acl, pii_types = excluded.pii_types,"
                 " status = 'pending', updated_at = now()"
-                " returning id",
+                " returning id, revision",
                 (org_id, source, item["path"], content, content_hash, Json(acl),
                  Json(pii_types)),
             ).fetchone())
             enqueued += 1
-            # Enqueue after the row is committed by the surrounding block; the
-            # key includes the hash so a re-upload of identical bytes is a no-op.
-            to_enqueue.append((str(doc["id"]), content_hash))
+            # Enqueue after the row is committed by the surrounding block. The
+            # key includes the hash so a re-upload of identical bytes is a no-op,
+            # and the revision so that identical bytes uploaded *after* a
+            # deletion are not — the chunks the earlier job produced are gone.
+            to_enqueue.append((str(doc["id"]), f"{content_hash}:{doc['revision']}"))
 
         # Mark deletions: previously known paths no longer present.
         deleted = 0
         for path, row in existing.items():
             if path not in incoming_paths and row["status"] != "deleted":
+                # Clear the content, not just the status. The row stays as a
+                # tombstone so a later resync can tell "gone" from "never seen",
+                # but keeping the text meant a document the tenant deleted was
+                # still sitting in the table, and storage_usage stops counting a
+                # deleted row, so those bytes also vanished from the quota while
+                # staying on disk. Resync compares content_hash, which is kept,
+                # so the tombstone still does its job.
                 conn.execute(
-                    "update documents set status = 'deleted', updated_at = now()"
-                    " where id = %s",
+                    "update documents set status = 'deleted', content = '',"
+                    " revision = revision + 1, updated_at = now() where id = %s",
                     (row["id"],),
                 )
                 conn.execute("delete from chunks where document_id = %s", (row["id"],))
