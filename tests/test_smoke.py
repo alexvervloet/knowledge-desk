@@ -1,9 +1,8 @@
-"""Phase 0 smoke: the health probe and the collection error shapes.
+"""Smoke tests: the health probe, and that the assistant is behind auth.
 
-These run with no database and no keys: the skeleton must stand on its own so
-CI has a fast, hermetic gate before the compose end-to-end. The ask contract
-moved to an authenticated SSE stream in Phase 4 and is covered in
-test_assistant.py.
+These run with no database and no keys, so CI has a fast, hermetic gate before
+the suites that need Postgres. The ask contract itself is an authenticated SSE
+stream, covered in test_assistant.py.
 """
 
 from fastapi.testclient import TestClient
@@ -19,18 +18,6 @@ def test_healthz_reports_mock_provider():
     body = resp.json()
     assert body["status"] == "ok"
     assert body["provider"] == "mock"
-
-
-def test_unknown_collection_is_404():
-    resp = client.get("/collections/does-not-exist")
-    assert resp.status_code == 404
-    assert "unknown collection" in resp.json()["detail"]
-
-
-def test_known_collection_ok():
-    resp = client.get("/collections/demo")
-    assert resp.status_code == 200
-    assert resp.json()["name"] == "demo"
 
 
 def test_ask_requires_auth():

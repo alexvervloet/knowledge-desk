@@ -1,8 +1,16 @@
-"""FastAPI application.
+"""FastAPI application: the whole HTTP surface.
 
-Phase 0 gave a keyless skeleton; Phase 1 adds the multi-tenant spine: signup,
-login, sessions, members, and org-scoped groups. No LLM yet. Every org-scoped
-route acts through a TenantScope so tenant isolation is enforced in one place.
+Accounts and sessions, org membership and groups, document sync and listing,
+access-scoped search, the streaming assistant, and the admin views (audit and
+usage).
+
+Two rules hold across every route here, and both are enforced elsewhere on
+purpose. Every org-scoped route acts through a TenantScope, which is the one
+place tenant isolation lives, so a query that forgets its org is a bug with a
+single address. And role checks belong to that scope rather than to these
+handlers, so a route added later cannot skip one by forgetting to ask; the
+exception is `DELETE /org`, which is an account operation rather than a scoped
+one, and says so where it sits.
 """
 
 from __future__ import annotations
@@ -47,26 +55,17 @@ app.add_middleware(
     expose_headers=["X-Total-Count"],
 )
 
-_KNOWN_COLLECTIONS = {"demo"}
-
 Slug = Field(pattern=r"^[a-z0-9][a-z0-9-]{1,38}[a-z0-9]$")
 Password = Field(min_length=8, max_length=200)
 Role = Field(pattern=r"^(owner|admin|member)$")
 
 
-# --- health and Phase 0 surface ------------------------------------------
+# --- health ---------------------------------------------------------------
 
 
 @app.get("/healthz")
 def healthz() -> dict:
     return {"status": "ok", "version": __version__, "provider": settings.provider}
-
-
-@app.get("/collections/{name}")
-def get_collection(name: str):
-    if name not in _KNOWN_COLLECTIONS:
-        raise HTTPException(status_code=404, detail=f"unknown collection: {name}")
-    return {"name": name}
 
 
 # --- auth -----------------------------------------------------------------
