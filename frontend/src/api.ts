@@ -34,6 +34,12 @@ async function req<T>(path: string, opts: RequestInit = {}): Promise<T> {
   return body as T;
 }
 
+export const changePassword = (current_password: string, new_password: string) =>
+  req<void>("/me/password", {
+    method: "POST",
+    body: JSON.stringify({ current_password, new_password }),
+  });
+
 export const PAGE_SIZE = 25;
 
 export type Page<T> = { items: T[]; total: number };

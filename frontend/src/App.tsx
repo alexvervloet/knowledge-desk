@@ -5,8 +5,9 @@ import { Ask } from "./components/Ask";
 import { Sources } from "./components/Sources";
 import { Members } from "./components/Members";
 import { Usage } from "./components/Usage";
+import { Account } from "./components/Account";
 
-type Tab = "ask" | "sources" | "members" | "usage";
+type Tab = "ask" | "sources" | "members" | "usage" | "account";
 
 export function App() {
   const [me, setMe] = useState<Me | null | "loading">("loading");
@@ -37,6 +38,7 @@ export function App() {
   const isAdmin = me.role === "owner" || me.role === "admin";
   const tabs: [Tab, string][] = [["ask", "Ask"], ["sources", "Sources"]];
   if (isAdmin) tabs.push(["members", "Members"], ["usage", "Usage"]);
+  tabs.push(["account", "Account"]);
 
   return (
     <div className="app">
@@ -60,6 +62,7 @@ export function App() {
       {tab === "sources" && <Sources isAdmin={isAdmin} />}
       {tab === "members" && isAdmin && <Members me={me} />}
       {tab === "usage" && isAdmin && <Usage />}
+      {tab === "account" && <Account me={me} />}
     </div>
   );
 }
