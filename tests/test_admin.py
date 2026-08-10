@@ -83,6 +83,61 @@ def test_member_cannot_administer():
     assert client.patch(f"/members/{uid}", headers=auth(member), json={"role": "admin"}).status_code == 403
 
 
+# --- the role-grant ceiling ------------------------------------------------
+#
+# Granting a role you do not hold is privilege escalation with an extra step:
+# whoever creates the account also chooses its password, so an admin who can mint
+# an owner can log in as it and hold every owner power.
+
+
+def test_admin_cannot_create_an_owner():
+    owner = signup("acme", "o@acme.test")
+    add_member(owner, "adm@acme.test", "admin")
+    admin = login("adm@acme.test", "acme")
+    resp = client.post("/members", headers=auth(admin),
+                       json={"email": "puppet@acme.test", "password": PW, "role": "owner"})
+    assert resp.status_code == 403
+    assert "cannot grant role owner" in resp.json()["detail"]
+    # And the account does not exist, so it cannot be logged into.
+    assert client.post("/auth/login",
+                       json={"email": "puppet@acme.test", "password": PW}).status_code == 401
+
+
+def test_admin_cannot_promote_anyone_to_owner():
+    owner = signup("acme", "o@acme.test")
+    add_member(owner, "adm@acme.test", "admin")
+    uid = add_member(owner, "dev@acme.test")
+    admin = login("adm@acme.test", "acme")
+    assert client.patch(f"/members/{uid}", headers=auth(admin),
+                        json={"role": "owner"}).status_code == 403
+    roles = {m["email"]: m["role"] for m in client.get("/members", headers=auth(owner)).json()}
+    assert roles["dev@acme.test"] == "member"
+
+
+def test_admin_can_still_grant_up_to_its_own_rank():
+    owner = signup("acme", "o@acme.test")
+    add_member(owner, "adm@acme.test", "admin")
+    admin = login("adm@acme.test", "acme")
+    assert client.post("/members", headers=auth(admin),
+                       json={"email": "a@acme.test", "password": PW,
+                             "role": "admin"}).status_code == 201
+    uid = client.post("/members", headers=auth(admin),
+                      json={"email": "b@acme.test", "password": PW,
+                            "role": "member"}).json()["user_id"]
+    assert client.patch(f"/members/{uid}", headers=auth(admin),
+                        json={"role": "admin"}).status_code == 200
+
+
+def test_owner_can_still_grant_ownership():
+    owner = signup("acme", "o@acme.test")
+    uid = add_member(owner, "co@acme.test", "owner")
+    assert client.patch(f"/members/{uid}", headers=auth(owner),
+                        json={"role": "member"}).status_code == 200
+    co = add_member(owner, "co2@acme.test")
+    assert client.patch(f"/members/{co}", headers=auth(owner),
+                        json={"role": "owner"}).status_code == 200
+
+
 # --- group management ------------------------------------------------------
 
 
