@@ -73,6 +73,12 @@ class Settings(BaseSettings):
     org_doc_cap: int = 1000                # per org, total documents
     org_storage_bytes_cap: int = 50_000_000  # per org, total content bytes
 
+    # Hard ceiling on a single request body, enforced before the body is read.
+    # The org caps above are the policy; this is what stops a request that will
+    # fail them from costing the memory to find out. Uploads past this have to
+    # be split into batches.
+    max_request_bytes: int = 16_000_000
+
     @property
     def provider(self) -> str:
         """"real" only when both keys are present; otherwise the mock fallback."""
