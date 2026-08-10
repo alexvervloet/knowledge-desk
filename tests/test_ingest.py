@@ -107,6 +107,41 @@ def test_dropped_file_is_deleted_and_chunks_removed():
     assert docs["a.txt"]["status"] == "deleted" and docs["a.txt"]["chunk_count"] == 0
 
 
+def test_dropped_file_releases_its_bytes():
+    """A dropped document stopped counting against the storage quota but kept
+    its content in the table, so upload-then-drop in a loop grew the database
+    without limit while the usage meter read zero — and text the tenant believed
+    they had deleted was still there."""
+    token = signup("acme", "o@acme.test")
+    body = "x" * 50_000
+    upload(token, [{"path": "big.txt", "content": body}])
+    ingest.run_pending()
+
+    upload(token, [])  # drop it
+    quota = client.get("/usage", headers=auth(token)).json()["storage"]["bytes"]
+    with connect() as conn:
+        stored = conn.execute(
+            "select coalesce(sum(octet_length(content)), 0) as n from documents"
+        ).fetchone()["n"]
+    assert quota == 0
+    assert stored == 0, "bytes that stopped counting must not still be on disk"
+
+
+def test_resync_after_a_drop_still_reingests():
+    """The tombstone has to keep working: resync compares content_hash, which
+    survives clearing the text, so re-uploading the same bytes is a real change
+    rather than an 'unchanged' no-op that never re-embeds."""
+    token = signup("acme", "o@acme.test")
+    upload(token, [{"path": "a.txt", "content": "alpha " * 400}])
+    ingest.run_pending()
+    upload(token, [])
+    upload(token, [{"path": "a.txt", "content": "alpha " * 400}])
+    ingest.run_pending()
+
+    doc = docs_by_path(token)["a.txt"]
+    assert doc["status"] == "ingested" and doc["chunk_count"] > 0
+
+
 # --- failure isolation ----------------------------------------------------
 
 
