@@ -399,3 +399,55 @@ the CI runtime to the image was the actual fix; the pool close was the symptom.
 Takeaway: test on the interpreter you deploy on, or you are testing a different
 program. And when a value arrives mangled, check its length against a round
 number before debugging the parser.
+
+## 24. A restriction the UI enforces is not a restriction
+
+The React admin panel offered exactly two roles when adding a member, `member`
+and `admin`, because letting an admin hand out ownership was never the intent.
+The API validated the same field against `^(owner|admin|member)$` and stopped
+there. So the rule existed, was understood by everyone who read the screen, and
+was enforced nowhere a caller with `curl` had to care about.
+
+The exploit is one request and needs no cleverness: an admin creates a member
+with `role: owner` and a password of their own choosing, logs in as that account,
+and now holds every owner power, including the irreversible `DELETE /org`. An
+audit reproduced it end to end, and the tenant deletion returned 204.
+
+What makes this one worth recording is that the neighbouring code was careful.
+`set_member_role` already blocked self-demotion and refused to remove the last
+owner, both of which are subtler than this. The guard that was missing was the
+blunt one: you cannot grant a role you do not hold. `role_at_least` had been
+sitting in `auth.py` since Phase 1 and was only ever asked "is the caller at
+least an admin", never "is the caller at least what they are handing out".
+
+Takeaway: for every field that names a privilege level, ask what happens when a
+caller sends the value your own UI will not offer. And when a permission check
+reads `require_role("admin")` before an operation whose parameter is itself a
+role, that is the shape of a missing ceiling.
+
+## 25. A default argument reached into a function that had no business paginating
+
+Pagination arrived late, as three list endpoints growing `limit: int = 100` and
+an offset. Every caller was updated. The tests passed, the pager worked, the
+totals were right.
+
+`export()` was also a caller. It returned
+`{"members": self.list_members(), "documents": self.list_documents()}`, and had
+done since long before pagination existed. Those bare calls silently acquired a
+limit of 100, so `/org/export` started returning the first hundred rows of each
+listing, in well-formed JSON, with nothing anywhere to say the rest existed. It
+was never noticed because every test tenant had a handful of documents.
+
+The failure mode is what makes it nasty. A truncated export does not error, does
+not warn, and looks exactly like a complete one; the only signal is a row count
+nobody is checking against a number they do not have. And it is the tenant
+data-export path, so the one time it matters is the time it is wrong.
+
+The fix pages explicitly to exhaustion. The more useful change is the reason
+it can't come back: `export()` no longer inherits anything from the listing
+signatures, so those defaults can move again without dragging the export along.
+
+Takeaway: adding a default argument changes every existing call site that did not
+pass one, and the compiler will not tell you which they were. When the default is
+a *limit*, grep for callers that wanted everything, because their behaviour just
+changed and their tests probably still pass.
