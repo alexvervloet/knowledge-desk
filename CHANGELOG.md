@@ -100,6 +100,9 @@ the audit missed that surfaced while fixing another.
   `DELETE /org` keeps its gate at the route, being an account operation rather
   than a scoped one, and says so.
 - Chunk inserts use one `executemany` instead of a round trip per chunk.
+- Request and response bodies moved out of the route module into `schemas.py`.
+  They are the trust boundary, and their bounds read better as one policy than
+  scattered between the handlers they belong to.
 - Documented two deliberate asymmetries that had looked accidental: why `jobs`
   is the one `org_id`-carrying table without an RLS policy, and why question
   text is stored unredacted while audit detail is not.
