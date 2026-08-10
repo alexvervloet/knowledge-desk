@@ -26,6 +26,20 @@ def auth(token: str) -> dict:
     return {"Authorization": f"Bearer {token}"}
 
 
+PW = "pw-supersecret"
+
+
+def login(email: str, slug: str) -> str:
+    resp = client.post("/auth/login", json={"email": email, "password": PW, "org_slug": slug})
+    assert resp.status_code == 200, resp.text
+    return resp.json()["token"]
+
+
+def add_member(owner: str, email: str, role: str = "member") -> str:
+    return client.post("/members", headers=auth(owner),
+                       json={"email": email, "password": PW, "role": role}).json()["user_id"]
+
+
 # --- signup / login -------------------------------------------------------
 
 
@@ -172,3 +186,52 @@ def test_revoked_membership_kills_session():
         conn.execute("delete from memberships")
     # The session row still exists, but with no membership it no longer resolves.
     assert client.get("/me", headers=auth(token)).status_code == 401
+
+
+# --- changing your own password --------------------------------------------
+
+
+def test_change_password_and_log_in_with_the_new_one():
+    token = signup("acme", "o@acme.test")
+    resp = client.post("/me/password", headers=auth(token),
+                       json={"current_password": PW, "new_password": "brand-new-pw-1"})
+    assert resp.status_code == 204
+    assert client.post("/auth/login",
+                       json={"email": "o@acme.test", "password": PW}).status_code == 401
+    assert client.post("/auth/login",
+                       json={"email": "o@acme.test",
+                             "password": "brand-new-pw-1"}).status_code == 200
+
+
+def test_change_password_requires_the_current_one():
+    token = signup("acme", "o@acme.test")
+    assert client.post("/me/password", headers=auth(token),
+                       json={"current_password": "not-the-password",
+                             "new_password": "brand-new-pw-1"}).status_code == 401
+
+
+def test_changing_password_revokes_other_sessions_but_not_this_one():
+    """The usual reason to change a password is that someone else may know it,
+    so other sessions must not survive it. The caller's own does, or changing
+    it would log you out of the tab you are in."""
+    signup("acme", "o@acme.test")
+    stale = login("o@acme.test", "acme")
+    current = login("o@acme.test", "acme")
+
+    assert client.post("/me/password", headers=auth(current),
+                       json={"current_password": PW,
+                             "new_password": "brand-new-pw-1"}).status_code == 204
+    assert client.get("/me", headers=auth(stale)).status_code == 401
+    assert client.get("/me", headers=auth(current)).status_code == 200
+
+
+def test_an_admin_cannot_change_someone_elses_password():
+    """There is no route for it, deliberately: an admin who could reset an
+    owner's password could log in as them, which is the escalation the
+    role-grant ceiling closed arriving through another door."""
+    owner = signup("acme", "o@acme.test")
+    uid = add_member(owner, "dev@acme.test")
+    for path in (f"/members/{uid}/password", f"/users/{uid}/password"):
+        resp = client.post(path, headers=auth(owner),
+                           json={"new_password": "brand-new-pw-1"})
+        assert resp.status_code == 404, f"{path} should not exist"
