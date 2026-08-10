@@ -362,6 +362,14 @@ class TenantScope:
                 (input_tokens, output_tokens, cost_usd, estimated, answer_id,
                  self.org_id),
             )
+            # Same transaction as the per-org ledger, so the two can never
+            # disagree about whether an answer was paid for.
+            conn.execute(
+                "insert into platform_spend(day, cost_usd) values (current_date, %s)"
+                " on conflict (day) do update"
+                " set cost_usd = platform_spend.cost_usd + excluded.cost_usd",
+                (cost_usd,),
+            )
 
     def mark_blocked(self, answer_id: str) -> None:
         with connect(self.org_id) as conn:
@@ -378,6 +386,16 @@ class TenantScope:
                 (self.org_id,),
             ).fetchone())
         return float(row["spend"])
+
+    def platform_spend_today(self) -> float:
+        """Today's spend across every tenant. Not org-scoped on purpose: it is
+        the ceiling on the whole deployment's bill, which per-org caps cannot
+        provide while signup is open (see migration 0013)."""
+        with connect(self.org_id) as conn:
+            row = conn.execute(
+                "select cost_usd from platform_spend where day = current_date"
+            ).fetchone()
+        return float(row["cost_usd"]) if row else 0.0
 
     def questions_this_month(self) -> int:
         with connect(self.org_id) as conn:

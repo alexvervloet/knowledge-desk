@@ -35,6 +35,11 @@ def _limit_block(scope: TenantScope) -> str | None:
         return "daily budget exhausted"
     if scope.questions_this_month() >= settings.monthly_question_cap:
         return "monthly question limit reached"
+    # The per-org caps above bound one tenant. They bound the bill only if
+    # tenants are scarce, and signup is open, so this is the number that
+    # actually caps what the deployment can spend in a day.
+    if scope.platform_spend_today() >= settings.platform_daily_budget_usd:
+        return "service daily budget exhausted"
     return None
 
 

@@ -54,6 +54,9 @@ class Settings(BaseSettings):
 
     # Operational controls (all env-overridable).
     daily_budget_usd: float = 5.0          # per org, rolling 24h
+    # Across every org, calendar day. The per-org caps bound one tenant; this is
+    # the only number that bounds the bill, since signup creates tenants freely.
+    platform_daily_budget_usd: float = 25.0
     monthly_question_cap: int = 1000       # per org, calendar month
     rate_burst: int = 5                    # per user, token-bucket burst
     rate_per_min: int = 30                 # per user, sustained
