@@ -12,7 +12,7 @@ do, not merely a change to security-adjacent code.
 ## 2026-08-10 — Audit remediation
 
 An audit of code quality, resilience, security, structure, and documentation
-raised seventeen findings. This covers the first five, each reproduced against
+raised seventeen findings. This covers seven of them, each reproduced against
 the running app before the fix and re-checked after.
 
 ### Security
@@ -33,6 +33,10 @@ the running app before the fix and re-checked after.
   skipped entirely when no user row came back, so a failed login finished in
   about 4 ms for an unknown email against roughly 240 ms for a known one. Both
   branches now hash.
+- Stop streaming exception detail to the caller. An unexpected failure put
+  `str(exc)` into the SSE frame the browser renders, so a database error handed
+  the caller its host name and the role the app connects as. The detail goes to
+  the log under a short reference and the caller gets the reference.
 
 ### Fixed
 
@@ -46,6 +50,11 @@ the running app before the fix and re-checked after.
   dollars while the model had already generated the response. Aborting each
   request just before the end was a way to spend without ever being billed.
   What was streamed is now estimated and booked.
+- Fail ingestion rather than silently dropping chunks. An embedder returning
+  fewer vectors than it was given texts was zipped short, leaving the document
+  marked `ingested` while holding a subset of its chunks — a permanent hole in
+  retrieval, invisible at every layer, that nothing downstream would ever see a
+  reason to retry. It now raises, so the job retries and dead-letters visibly.
 
 ### Added
 
