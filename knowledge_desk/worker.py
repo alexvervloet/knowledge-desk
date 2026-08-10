@@ -12,12 +12,18 @@ from __future__ import annotations
 import sys
 import time
 
+from knowledge_desk.accounts import purge_expired_sessions
 from knowledge_desk.ingest import run_pending
 
 POLL_SECONDS = 2.0
+# Expired sessions are refused on sight, so sweeping them is housekeeping and
+# an hour of staleness costs nothing. The worker is the process already awake
+# on a timer, which is the only reason this lives here.
+SESSION_PURGE_SECONDS = 3600.0
 
 
 def loop(once: bool = False) -> None:
+    next_purge = 0.0
     while True:
         counts = run_pending()
         if counts["processed"]:
@@ -26,6 +32,12 @@ def loop(once: bool = False) -> None:
                 f" requeued={counts['requeued']} dead={counts['dead']}",
                 flush=True,
             )
+        now = time.monotonic()
+        if now >= next_purge:
+            purged = purge_expired_sessions()
+            if purged:
+                print(f"purged {purged} expired session(s)", flush=True)
+            next_purge = now + SESSION_PURGE_SECONDS
         if once:
             return
         time.sleep(POLL_SECONDS)
