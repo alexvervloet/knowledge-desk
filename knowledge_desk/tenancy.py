@@ -349,13 +349,18 @@ class TenantScope:
         return str(row["id"])
 
     def finalize_answer(
-        self, answer_id: str, input_tokens: int, output_tokens: int, cost_usd: float
+        self, answer_id: str, input_tokens: int, output_tokens: int, cost_usd: float,
+        estimated: bool = False,
     ) -> None:
+        """Record what an answer consumed. `estimated` marks usage inferred from
+        what was streamed rather than reported by the provider, which is what a
+        client disconnect leaves behind (see assistant.answer_stream)."""
         with connect(self.org_id) as conn:
             conn.execute(
                 "update answers set input_tokens = %s, output_tokens = %s,"
-                " cost_usd = %s where id = %s and org_id = %s",
-                (input_tokens, output_tokens, cost_usd, answer_id, self.org_id),
+                " cost_usd = %s, usage_estimated = %s where id = %s and org_id = %s",
+                (input_tokens, output_tokens, cost_usd, estimated, answer_id,
+                 self.org_id),
             )
 
     def mark_blocked(self, answer_id: str) -> None:

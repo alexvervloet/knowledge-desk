@@ -46,6 +46,11 @@ def answer_stream(
     tracer = AskTracer(question, scope.org_id, scope.ctx.user_id, scope.ctx.email,
                        provider.name, model)
     error_message: str | None = None
+    # Everything the finally block needs to bill a stream that does not finish.
+    answer_id: str | None = None
+    contexts: list[dict[str, Any]] = []
+    streamed: list[str] = []
+    billed = False
     try:
         # Hard limits first: a blocked question is recorded but never reaches the model.
         blocked_reason = _limit_block(scope)
@@ -88,6 +93,7 @@ def answer_stream(
             if event["type"] == "usage":
                 scope.finalize_answer(answer_id, event["input_tokens"],
                                       event["output_tokens"], event["cost_usd"])
+                billed = True
                 tracer.done(event["input_tokens"], event["output_tokens"],
                             event["cost_usd"])
                 yield {
@@ -97,10 +103,25 @@ def answer_stream(
                     "cost_usd": event["cost_usd"],
                 }
             else:
+                streamed.append(event["text"])
                 tracer.token(event["text"])
                 yield event
     except Exception as exc:  # noqa: BLE001 - a provider failure must not 500 mid-stream
         error_message = f"answer generation failed: {exc}"
         yield {"type": "error", "message": error_message}
     finally:
+        # A stream that never reaches its usage frame — the client disconnected,
+        # or the provider failed part way — still cost real tokens, because the
+        # model generated them before we stopped reading. Left unbilled, aborting
+        # each request just before the end spends without ever touching the
+        # budget. Book an estimate instead, flagged as such.
+        #
+        # Only when something was actually streamed: that is the evidence the
+        # model ran at all, and it keeps a failure that happened before the first
+        # token from inventing a charge.
+        if answer_id is not None and not billed and streamed:
+            usage = provider.estimate(question, contexts, "".join(streamed))
+            scope.finalize_answer(answer_id, usage["input_tokens"],
+                                  usage["output_tokens"], usage["cost_usd"],
+                                  estimated=True)
         tracer.finish(error=error_message)
