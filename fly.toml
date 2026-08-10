@@ -27,6 +27,18 @@ primary_region = "iad"
   RATE_BURST = "3"
   RATE_PER_MIN = "10"
 
+  # The per-org numbers above bound one tenant, and signup is open, so a script
+  # that creates orgs gets a fresh budget for each. This is the number that
+  # actually caps a day's bill, whatever anyone does with the signup form.
+  PLATFORM_DAILY_BUDGET_USD = "3.00"
+
+  # Login and signup are throttled per caller address. Behind Fly's proxy the
+  # socket peer is the proxy, so read the address from the header Fly sets and
+  # overwrites on the way in (a client cannot forge it).
+  CLIENT_IP_HEADER = "Fly-Client-IP"
+  AUTH_RATE_BURST = "5"
+  AUTH_RATE_PER_MIN = "5"
+
 [processes]
   app = "uvicorn knowledge_desk.main:app --host 0.0.0.0 --port 8000"
   worker = "python -m knowledge_desk.worker"
