@@ -451,3 +451,76 @@ Takeaway: adding a default argument changes every existing call site that did no
 pass one, and the compiler will not tell you which they were. When the default is
 a *limit*, grep for callers that wanted everything, because their behaviour just
 changed and their tests probably still pass.
+
+## 26. A streamed answer's bill arrives after the last token, so the client decides whether you meter it
+
+Cost attribution worked, was tested, and showed up on the admin dashboard. It
+also had a hole big enough to drive through: `finalize_answer` ran when the
+provider's usage message arrived, and for a streamed response that message comes
+*after* the final token. Disconnect one frame earlier and the answer row stayed
+at zero tokens and zero dollars, while Anthropic had already generated the
+response and would still charge for it. Aborting every request just before the
+end was a way to spend without ever appearing in the ledger.
+
+What made it invisible is that the happy path is the only path the tests walked.
+`test_answer_records_usage` consumed the generator to exhaustion, as every test
+client does by default. The abort case needed a test that deliberately stops
+reading, which is not a thing you write unless you have thought about the client
+being adversarial rather than merely absent.
+
+The fix books an estimate from what was streamed, in the `finally` block that
+already existed for the tracer, and only when at least one token came out — that
+is the evidence the model actually ran. Estimates get their own column, because a
+number you inferred sitting in the same field as a number the provider reported
+is how a dashboard starts lying quietly.
+
+Takeaway: any metering that happens at the end of a stream is optional from the
+client's point of view. Meter incrementally, or make the teardown path book
+something, and write at least one test that hangs up early.
+
+## 27. The rate limiter was on the door that already needed a key
+
+There was a token bucket, it worked, and it was wired to `/ask` — an endpoint you
+cannot reach without a valid session. The two endpoints an anonymous caller can
+reach, `/auth/login` and `/auth/signup`, had nothing. Twenty-five consecutive
+password guesses all came back 401, at whatever rate they were sent.
+
+The same route leaked account existence through its own response time, and for
+the most ordinary reason: the code returned early when no user row came back, so
+a miss skipped bcrypt entirely. About 4ms against roughly 240ms. No error message
+differed, no status code differed, and the gap is a clean oracle anyway. The fix
+is to verify against a throwaway hash on the miss path, so both branches pay the
+same cost — deliberately doing useless work, which reads as a bug until you know
+why it is there, hence a comment that outlives the reasoning.
+
+Both were failures of aim rather than of implementation. The control existed and
+was pointed at the wrong surface, which is harder to notice than a missing
+control, because a search for "is there rate limiting" finds it and stops.
+
+Takeaway: enumerate the endpoints reachable *without* credentials and check each
+one separately. That set is small, it is the entire attack surface for anonymous
+callers, and a protection applied everywhere else will not show up as absent.
+
+## 28. Per-tenant caps do not bound a bill when tenants are free
+
+The spend controls were per-org and they were thorough: a rolling 24-hour budget,
+a monthly question cap, storage and document caps, all enforced before the model
+runs and all with tests. The deployment tightened them further because the demo
+credentials are published, cutting the daily budget to a dollar.
+
+Every one of those numbers is a bound on one tenant. `/auth/signup` is
+unauthenticated and hands out a tenant with a fresh set of all four, so the
+worst case was never "a dollar a day"; it was "a dollar a day times however many
+times someone is willing to POST to the signup form". The caps were sized against
+a threat model where orgs are scarce, in a system where they are free.
+
+Throttling signup raises the cost of that attack, but a throttle is a rate, not a
+ceiling, and the question the deployment actually needed answered was "what is
+the most this can spend today". That takes a number that is not scoped to a
+tenant at all — which turned out to also mean it could not live under row-level
+security, because a policy keyed on the current org makes the total unreadable
+from the code that has to check it.
+
+Takeaway: for every quota, ask what the unit is and how expensive that unit is to
+create. A per-X limit only bounds anything if X is scarce, and if X is created by
+an open endpoint, the real limit has to be global.
