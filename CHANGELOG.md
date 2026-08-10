@@ -126,9 +126,15 @@ the audit missed that surfaced while fixing another.
   limits alongside the product ones, including what this pass deliberately did
   not fix.
 
+- Frontend tests, and `npm test` in CI, which previously ran a build and
+  stopped. The SSE frame parser and the pager arithmetic are the two places
+  with real logic in them; the parser tests feed frames split mid-JSON and one
+  byte at a time, because the server's framing does not survive TCP.
+
 ### Removed
 
 - `GET /collections/{name}`, Phase 0 scaffolding that nothing called.
+- A duplicated tear-down step in the compose CI job.
 
 ## 2026-08-09 — Deployment and dependency maintenance
 
