@@ -13,6 +13,8 @@ boundary carries all the way through to the generated answer.
 
 from __future__ import annotations
 
+import logging
+import secrets
 from collections.abc import Iterator
 from typing import Any
 
@@ -21,6 +23,8 @@ from knowledge_desk.config import settings
 from knowledge_desk.providers import get_answer_provider
 from knowledge_desk.tenancy import TenantScope
 from knowledge_desk.tracing import AskTracer
+
+log = logging.getLogger("knowledge_desk")
 
 REFUSAL = (
     "I don't have anything I'm allowed to cite for that. Nothing in the"
@@ -50,7 +54,10 @@ def answer_stream(
     model = settings.answer_model if provider.name == "claude" else provider.name
     tracer = AskTracer(question, scope.org_id, scope.ctx.user_id, scope.ctx.email,
                        provider.name, model)
-    error_message: str | None = None
+    # The full failure detail, for the trace and the log. Not what the caller
+    # sees: an unexpected exception carries whatever the failing layer put in it,
+    # which for a database error is host names and role names.
+    trace_error: str | None = None
     # Everything the finally block needs to bill a stream that does not finish.
     answer_id: str | None = None
     contexts: list[dict[str, Any]] = []
@@ -65,9 +72,11 @@ def answer_stream(
             audit.log(scope.org_id, scope.ctx.user_id, "question.blocked",
                       {"answer_id": answer_id, "reason": blocked_reason})
             yield {"type": "meta", "answer_id": answer_id, "provider": provider.name}
-            error_message = (f"[LIMIT] request blocked: {blocked_reason}."
-                             " No answer was generated.")
-            yield {"type": "error", "message": error_message}
+            # Deliberately caller-facing: this one is a message we chose, telling
+            # the asker exactly why they got nothing.
+            trace_error = (f"[LIMIT] request blocked: {blocked_reason}."
+                           " No answer was generated.")
+            yield {"type": "error", "message": trace_error}
             return
 
         contexts = retrieval.search(scope, question, k)
@@ -112,8 +121,21 @@ def answer_stream(
                 tracer.token(event["text"])
                 yield event
     except Exception as exc:  # noqa: BLE001 - a provider failure must not 500 mid-stream
-        error_message = f"answer generation failed: {exc}"
-        yield {"type": "error", "message": error_message}
+        # str(exc) went straight into the frame the browser renders, so a
+        # database failure handed the caller its host name and the role it was
+        # connecting as. The detail goes to the log; the caller gets a reference
+        # that ties their report back to it.
+        reference = secrets.token_hex(4)
+        log.exception(
+            "answer generation failed [ref=%s] org=%s user=%s",
+            reference, scope.org_id, scope.ctx.user_id,
+        )
+        trace_error = f"answer generation failed [ref={reference}]: {exc!r}"
+        yield {
+            "type": "error",
+            "message": ("Answer generation failed. Quote reference"
+                        f" {reference} if you report this."),
+        }
     finally:
         # A stream that never reaches its usage frame — the client disconnected,
         # or the provider failed part way — still cost real tokens, because the
@@ -129,4 +151,4 @@ def answer_stream(
             scope.finalize_answer(answer_id, usage["input_tokens"],
                                   usage["output_tokens"], usage["cost_usd"],
                                   estimated=True)
-        tracer.finish(error=error_message)
+        tracer.finish(error=trace_error)
