@@ -20,8 +20,19 @@ class TokenBucketLimiter:
         self._clock = clock
         self._buckets: dict[str, tuple[float, float]] = {}  # key -> (tokens, last_ts)
 
+    # A bucket refills to full after burst/rate minutes of silence, at which
+    # point it is indistinguishable from a key that has never been seen. Holding
+    # it after that is pure leak: one entry per user id, or per client address,
+    # kept for the life of the process.
+    _EVICT_AFTER_SECONDS = 3600.0
+
     def reset(self) -> None:
         self._buckets.clear()
+
+    def _evict_idle(self, now: float) -> None:
+        cutoff = now - self._EVICT_AFTER_SECONDS
+        for key in [k for k, (_, last) in self._buckets.items() if last < cutoff]:
+            del self._buckets[key]
 
     def check(
         self, key: str, burst: int | None = None, per_min: int | None = None
@@ -35,6 +46,9 @@ class TokenBucketLimiter:
         burst = settings.rate_burst if burst is None else burst
         refill_per_sec = (settings.rate_per_min if per_min is None else per_min) / 60.0
         now = self._clock()
+        if len(self._buckets) > 1000:
+            # Amortized: sweeping on every call would make a cheap check O(n).
+            self._evict_idle(now)
         tokens, last = self._buckets.get(key, (float(burst), now))
         tokens = min(float(burst), tokens + (now - last) * refill_per_sec)
 
