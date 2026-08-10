@@ -1,7 +1,9 @@
 import { PAGE_SIZE } from "../api";
+import { pagerState } from "./pagerState";
 
 /** Offset pager for the admin listings. Renders nothing when everything fits on
- *  one page, so small orgs never see controls they do not need. */
+ *  one page, so small orgs never see controls they do not need. The arithmetic
+ *  lives in pagerState so its boundaries can be tested without a DOM. */
 export function Pager({
   offset,
   total,
@@ -13,12 +15,8 @@ export function Pager({
   count: number;
   onChange: (next: number) => void;
 }) {
-  if (total <= PAGE_SIZE) return null;
-
-  const first = total === 0 ? 0 : offset + 1;
-  const last = offset + count;
-  const hasPrev = offset > 0;
-  const hasNext = last < total;
+  const { visible, first, last, hasPrev, hasNext } = pagerState(offset, total, count);
+  if (!visible) return null;
 
   return (
     <div className="row" style={{ marginTop: "0.6rem", justifyContent: "space-between" }}>
