@@ -18,6 +18,7 @@ from pydantic import BaseModel, Field
 from knowledge_desk import __version__, accounts, assistant, audit, ingest, retrieval, tracing
 from knowledge_desk.config import settings
 from knowledge_desk.deps import (
+    auth_rate_limit,
     bearer_token,
     current_ctx,
     current_scope,
@@ -85,7 +86,9 @@ class TokenResponse(BaseModel):
 
 
 @app.post("/auth/signup", status_code=status.HTTP_201_CREATED, response_model=TokenResponse)
-def signup(req: SignupRequest) -> TokenResponse:
+def signup(
+    req: SignupRequest, _: Annotated[None, Depends(auth_rate_limit)] = None
+) -> TokenResponse:
     ctx = accounts.create_org_with_owner(
         req.org_slug, req.org_name, req.email, req.password
     )
@@ -95,7 +98,9 @@ def signup(req: SignupRequest) -> TokenResponse:
 
 
 @app.post("/auth/login", response_model=TokenResponse)
-def login(req: LoginRequest) -> TokenResponse:
+def login(
+    req: LoginRequest, _: Annotated[None, Depends(auth_rate_limit)] = None
+) -> TokenResponse:
     ctx = accounts.authenticate(req.email, req.password, req.org_slug)
     token = accounts.create_session(ctx)
     audit.log(ctx.org_id, ctx.user_id, "user.login", {})

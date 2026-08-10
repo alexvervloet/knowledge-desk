@@ -11,8 +11,43 @@ from fastapi import Depends, FastAPI, Header, HTTPException, Request
 from fastapi.responses import JSONResponse
 
 from knowledge_desk import accounts
+from knowledge_desk.config import settings
 from knowledge_desk.errors import AuthError, Conflict, DomainError, Forbidden, NotFound
+from knowledge_desk.ratelimit import auth_limiter
 from knowledge_desk.tenancy import AuthContext, TenantScope
+
+
+def client_key(request: Request) -> str:
+    """Identify an unauthenticated caller for rate limiting.
+
+    There is no user id yet on the auth routes, so the caller's address is the
+    only handle available. Behind a proxy the socket peer is the proxy, which
+    would put every user in one bucket, so a configured header wins when present.
+    """
+    header = settings.client_ip_header
+    if header:
+        value = request.headers.get(header)
+        if value:
+            return value.split(",")[0].strip()
+    return request.client.host if request.client else "unknown"
+
+
+def auth_rate_limit(request: Request) -> None:
+    """Throttle the unauthenticated auth routes per caller address.
+
+    Without this, `/auth/login` takes password guesses as fast as they arrive,
+    and each one costs a bcrypt verification, so the same requests are both a
+    brute-force channel and a way to spend someone else's CPU.
+    """
+    allowed, retry_after = auth_limiter.check(
+        client_key(request), settings.auth_rate_burst, settings.auth_rate_per_min
+    )
+    if not allowed:
+        raise HTTPException(
+            status_code=429,
+            detail="too many attempts",
+            headers={"Retry-After": str(int(retry_after) + 1)},
+        )
 
 
 def bearer_token(authorization: Annotated[str | None, Header()] = None) -> str:

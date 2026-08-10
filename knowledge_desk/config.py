@@ -57,6 +57,16 @@ class Settings(BaseSettings):
     monthly_question_cap: int = 1000       # per org, calendar month
     rate_burst: int = 5                    # per user, token-bucket burst
     rate_per_min: int = 30                 # per user, sustained
+    auth_rate_burst: int = 10              # per client IP, on login and signup
+    auth_rate_per_min: int = 10            # per client IP, sustained
+
+    # Header carrying the real client IP when the app sits behind a proxy that
+    # sets it (Fly-Client-IP on Fly). Unset means trust the socket peer, which is
+    # right locally and wrong behind a proxy, where every caller would otherwise
+    # share the proxy's bucket. Only set this to a header the proxy overwrites on
+    # the way in; one a client can supply itself is a limiter that bypasses
+    # itself.
+    client_ip_header: str | None = None
     org_doc_cap: int = 1000                # per org, total documents
     org_storage_bytes_cap: int = 50_000_000  # per org, total content bytes
 
