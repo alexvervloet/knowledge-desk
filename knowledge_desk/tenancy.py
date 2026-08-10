@@ -9,6 +9,7 @@ here, that is the bug.
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
 
@@ -247,7 +248,35 @@ class TenantScope:
     def export(self) -> dict[str, Any]:
         """A portable snapshot of the org's members and documents (metadata, not
         raw content). Backs the tenant data-export requirement."""
-        return {"members": self.list_members(), "documents": self.list_documents()}
+        return {
+            "members": self._sweep(self.list_members),
+            "documents": self._sweep(self.list_documents),
+        }
+
+    # Rows per round trip when sweeping a listing for the export. Not the API's
+    # page cap, which bounds what a client may ask for; this is an internal loop,
+    # so the number only trades round trips against peak memory.
+    _SWEEP_PAGE = 500
+
+    def _sweep(
+        self, fetch: Callable[[int, int], list[dict[str, Any]]]
+    ) -> list[dict[str, Any]]:
+        """Collect every row of a paginated listing.
+
+        export() used to call the list methods with no arguments and inherit
+        whatever their limit defaulted to. That was fine until pagination landed
+        and the default became 100, at which point a tenant's export silently
+        stopped at 100 members and 100 documents: well-formed JSON, quietly
+        incomplete, which is the worst way for a data-export to fail. Paging
+        explicitly here means the listing defaults can move again without taking
+        the export with them.
+        """
+        rows: list[dict[str, Any]] = []
+        while True:
+            page = fetch(self._SWEEP_PAGE, len(rows))
+            rows += page
+            if len(page) < self._SWEEP_PAGE:
+                return rows
 
     # --- retrieval --------------------------------------------------------
 
