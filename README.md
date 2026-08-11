@@ -10,6 +10,26 @@ application, not the retrieval technique. The interesting parts are tenancy,
 access-controlled retrieval, background ingestion, quotas and cost attribution,
 audit, and evals that gate merges. The RAG core is reused from earlier work.
 
+## Live demo
+
+**https://knowledge-desk.fly.dev**
+
+![Two tenants ask the same question and get different answers](demo.gif)
+
+Recorded against the live deployment with `vhs demo.tape`, so every answer above
+is a real Claude call over real retrieval. Acme's handbook answers the question.
+Globex retrieves only its own documents and the assistant refuses rather than
+reaching for the model's general knowledge, which is the permission boundary
+holding all the way through to the generated text.
+
+Log in as `owner@acme.test` or `owner@globex.test` (password
+`demo-password-123`) and ask "how long do refunds take?" in both. Acme answers
+it with a citation; Globex retrieves only its own documents and says it has
+nothing it is allowed to cite. That refusal is the whole point of the project.
+
+Running with real Claude answers and Voyage embeddings. The machine sleeps when
+idle, so the first request after a quiet period pays a cold start.
+
 ## Status
 
 Feature complete and deployed. See [WALKTHROUGH.md](WALKTHROUGH.md) for a
@@ -139,35 +159,6 @@ After `python -m knowledge_desk.seed` (password `demo-password-123`):
 
 Each org's documents are non-overlapping, so a question in one org can never
 retrieve the other's content.
-
-## Live demo
-
-**https://knowledge-desk.fly.dev**
-
-![Two tenants ask the same question and get different answers](demo.gif)
-
-Recorded against the live deployment with `vhs demo.tape`, so every answer above
-is a real Claude call over real retrieval. Acme's handbook answers the question.
-Globex retrieves only its own documents and the assistant refuses rather than
-reaching for the model's general knowledge, which is the permission boundary
-holding all the way through to the generated text.
-
-Log in with either account below (password `demo-password-123`) and ask
-"how long do refunds take?" in both. Acme answers it with a citation; Globex
-retrieves only its own documents and says it has nothing it is allowed to cite.
-That refusal is the whole point of the project.
-
-| org | email |
-|---|---|
-| acme | owner@acme.test |
-| globex | owner@globex.test |
-
-Running with real Claude answers and Voyage embeddings. The machine sleeps when
-idle, so the first request after a quiet period pays a cold start.
-
-Tenant isolation is enforced in three layers: the data layer's `org_id` filter,
-the ACL-aware candidate fetch in retrieval, and Postgres row-level security
-underneath (the app connects as a least-privilege role so RLS applies).
 
 ## Observability
 
