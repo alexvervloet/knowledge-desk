@@ -17,6 +17,33 @@ narrated trip through the app end to end (branch points, gotchas, and what it is
 and is not good at), [LESSONS.md](LESSONS.md) for what the build taught,
 including the mistakes, and [CHANGELOG.md](CHANGELOG.md) for what changed when.
 
+## Learning from this project
+
+**→ [docs/](docs/) is a course built out of this system**, for engineers who can
+code but have not shipped an LLM application. It runs keyless, so you need no API
+keys to work through it.
+
+It starts from an uncomfortable ratio: the part a tutorial would call "the RAG"
+is 126 lines of the 3,169 here. The other 96% is what the
+[thesis](docs/01-thesis.md) argues is the actual job — access-controlled
+retrieval, tenant isolation, injection defense, cost ceilings, and evals that
+block a merge.
+
+The centre of it is four [exercises](docs/exercises/) that break a safety
+property on purpose and show you what catches it:
+
+| Exercise | You learn |
+|---|---|
+| [Break the ACL filter](docs/exercises/01-break-the-acl-filter.md) | Why the permission check belongs inside the ranking query, not after it |
+| [Forge the delimiters](docs/exercises/02-forge-the-delimiters.md) | How an uploaded document attacks your prompt, and what a real boundary costs |
+| [Remove the invisible layer](docs/exercises/03-remove-the-invisible-layer.md) | That deleting a security layer is **undetectable from behaviour** — every eval still passes |
+| [Spend without a ceiling](docs/exercises/04-spend-without-a-ceiling.md) | Why per-tenant caps bound nothing when signup is open |
+
+Also: [evals as a merge gate](docs/03-evals.md), [what the retrieval core
+deliberately omits](docs/04-rag-core.md), and [how to read the build
+history](docs/05-reading-the-history.md) — 200+ commits and 29 written-up
+mistakes.
+
 ## Architecture
 
 Ingestion is asynchronous, so embedding never blocks a request. Asking is
