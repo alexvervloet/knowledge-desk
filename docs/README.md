@@ -3,7 +3,7 @@
 A course built out of a working system. Knowledge Desk is a multi-tenant,
 permissions-aware knowledge assistant that is deployed and green in CI; these
 docs turn it into something you can learn the operational side of AI engineering
-from, without first having to reverse-engineer 6,000 lines.
+from, without first having to reverse-engineer the whole thing.
 
 ## Who this is for
 
