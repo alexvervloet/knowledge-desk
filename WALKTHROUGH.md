@@ -323,10 +323,15 @@ is a security incident.
   tweak.
 - **As a general chatbot.** It has no conversation memory. Every question is
   independent, so follow-ups like "what about the second one?" have no referent.
-- **On account lifecycle.** There is no password change, no reset, and no way for
-  a member to replace the temporary password the admin who added them chose. A
-  leaked credential is revoked by removing the membership, which is a blunt
-  instrument. Sessions last 30 days and expired rows are never reaped.
+- **On account lifecycle.** A member can change their own password, which revokes
+  their other sessions, so the temporary password an admin chose does not have to
+  live forever. Admin-initiated reset is deliberately absent rather than merely
+  missing: an admin who could reset a member's password could reset an owner's
+  and log in as them, which is the escalation the role-grant ceiling closed
+  arriving through another door. The real gap is that there is no "forgot
+  password" flow, so a member who cannot log in has no route back in and the
+  blunt instrument is still removing and re-adding the membership. Sessions last
+  30 days, and expired rows are purged by the worker.
 - **On abuse, beyond the controls that are there.** An audit pass in August 2026
   found the operational limits thorough on the authenticated path and thin around
   it, and the gaps it found are fixed: login and signup are throttled and no
