@@ -7,7 +7,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from knowledge_desk import ingest
-from knowledge_desk.db import connect
+from knowledge_desk.db import connect, require_row
 from knowledge_desk.embeddings import EMBED_FAIL_MARKER, MockEmbedder
 from knowledge_desk.main import app
 
@@ -44,9 +44,9 @@ def drain_until_settled(max_rounds: int = 6) -> None:
     for _ in range(max_rounds):
         ingest.run_pending()
         with connect() as conn:
-            remaining = conn.execute(
+            remaining = require_row(conn.execute(
                 "select count(*) as n from jobs where status = 'queued'"
-            ).fetchone()["n"]
+            ).fetchone())["n"]
             if remaining == 0:
                 return
             conn.execute("update jobs set run_after = now() where status = 'queued'")
@@ -120,9 +120,9 @@ def test_dropped_file_releases_its_bytes():
     upload(token, [])  # drop it
     quota = client.get("/usage", headers=auth(token)).json()["storage"]["bytes"]
     with connect() as conn:
-        stored = conn.execute(
+        stored = require_row(conn.execute(
             "select coalesce(sum(octet_length(content)), 0) as n from documents"
-        ).fetchone()["n"]
+        ).fetchone())["n"]
     assert quota == 0
     assert stored == 0, "bytes that stopped counting must not still be on disk"
 
@@ -158,9 +158,9 @@ def test_poison_document_dead_letters_without_wedging_queue():
     assert docs["good.txt"]["status"] == "ingested"
     assert docs["poison.txt"]["status"] == "failed"
     with connect() as conn:
-        dead = conn.execute(
+        dead = require_row(conn.execute(
             "select count(*) as n from jobs where status = 'dead'"
-        ).fetchone()["n"]
+        ).fetchone())["n"]
     assert dead == 1
 
 
