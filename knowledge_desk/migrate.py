@@ -88,7 +88,13 @@ def apply_pending() -> list[str]:
                 continue
             sql_text = path.read_text()
             with conn.transaction():
-                conn.execute(sql_text)
+                # psycopg types `execute` as LiteralString-only, so that every
+                # runtime-assembled query has to justify itself. This one is a
+                # versioned file from this repo, not user input.
+                #
+                # Silenced for pyright rather than cast, because mypy erases
+                # LiteralString to str and would then call the cast redundant.
+                conn.execute(sql_text)  # pyright: ignore[reportCallIssue, reportArgumentType]
                 conn.execute(
                     "insert into schema_migrations(version) values (%s)", (version,)
                 )
