@@ -4,6 +4,7 @@ may see) that the retriever trace span reports.
 """
 
 import contextlib
+from typing import Any
 
 import langfuse
 import pytest
@@ -33,11 +34,11 @@ def test_tracer_is_inert_without_keys():
 
 class _FakeObs:
     def __init__(self):
-        self.start_kwargs = {}
-        self.updates = []
-        self.children = []
+        self.start_kwargs: dict[str, Any] = {}
+        self.updates: list[dict[str, Any]] = []
+        self.children: list[_FakeObs] = []
         self.ended = False
-        self.trace_io = None
+        self.trace_io: dict[str, Any] = {}
 
     def start_observation(self, **kw):
         child = _FakeObs()
@@ -57,7 +58,7 @@ class _FakeObs:
 
 class _FakeClient:
     def __init__(self):
-        self.root = None
+        self.root: _FakeObs | None = None
 
     def start_observation(self, **kw):
         self.root = _FakeObs()
@@ -83,6 +84,7 @@ def test_tracer_records_spans_when_enabled(monkeypatch):
     t.finish()
 
     root = fake.root
+    assert root is not None, "the active tracer must have opened a root observation"
     assert root.start_kwargs["name"] == "ask"
     assert root.start_kwargs["metadata"]["org_id"] == "org-1"
     retrieval, generation = root.children  # retriever then generation
