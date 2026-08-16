@@ -26,7 +26,12 @@ from psycopg_pool import ConnectionPool
 
 from knowledge_desk.config import settings
 
-_pool: ConnectionPool[psycopg.Connection[DictRow]] | None = None
+# The pool's connection type comes from its `connection_class` argument, which
+# we leave at the default, so nothing in the constructor call pins it down. Name
+# the specialization once and build from that, rather than repeating it.
+DictConnectionPool = ConnectionPool[psycopg.Connection[DictRow]]
+
+_pool: DictConnectionPool | None = None
 
 
 def _configure(conn: psycopg.Connection[DictRow]) -> None:
@@ -44,16 +49,16 @@ def _configure(conn: psycopg.Connection[DictRow]) -> None:
     conn.commit()
 
 
-def get_pool() -> ConnectionPool[psycopg.Connection[DictRow]]:
+def get_pool() -> DictConnectionPool:
     global _pool
     if _pool is None:
-        _pool = ConnectionPool(
+        _pool = DictConnectionPool(
             settings.app_database_url,
             min_size=settings.db_pool_min,
             max_size=settings.db_pool_max,
             kwargs={"row_factory": dict_row},
             configure=_configure,
-            check=ConnectionPool.check_connection,  # discard connections killed server-side
+            check=DictConnectionPool.check_connection,  # discard connections killed server-side
             open=True,
         )
     return _pool
