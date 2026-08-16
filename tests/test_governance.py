@@ -6,7 +6,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from knowledge_desk import ingest
-from knowledge_desk.db import connect
+from knowledge_desk.db import connect, require_row
 from knowledge_desk.main import app
 from knowledge_desk.tenancy import TenantScope
 
@@ -178,11 +178,11 @@ def test_pooled_connection_does_not_inherit_previous_tenant():
         # A scoped borrow, exactly as a request would do.
         with connect(org_a) as conn:
             seen_ids.add(id(conn))
-            assert conn.execute("select count(*) as n from documents").fetchone()["n"] == 1
+            assert require_row(conn.execute("select count(*) as n from documents").fetchone())["n"] == 1
         # An unscoped borrow: whatever connection this gets, it must see nothing.
         with connect() as conn:
             seen_ids.add(id(conn))
-            assert conn.execute("select count(*) as n from documents").fetchone()["n"] == 0
+            assert require_row(conn.execute("select count(*) as n from documents").fetchone())["n"] == 0
 
     # The pool really did hand back the same connection object at least once,
     # so the assertions above exercised reuse rather than fresh connections.
@@ -197,6 +197,6 @@ def test_rls_blocks_query_without_org_context():
     # As the app role with no org GUC set, RLS returns zero rows even though the
     # document exists; with the org context set, it is visible.
     with connect() as conn:
-        assert conn.execute("select count(*) as n from documents").fetchone()["n"] == 0
+        assert require_row(conn.execute("select count(*) as n from documents").fetchone())["n"] == 0
     with connect(org_id) as conn:
-        assert conn.execute("select count(*) as n from documents").fetchone()["n"] == 1
+        assert require_row(conn.execute("select count(*) as n from documents").fetchone())["n"] == 1
