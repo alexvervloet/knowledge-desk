@@ -4,6 +4,7 @@ model. Feedback attaches to a recorded answer, one per user, org-scoped.
 """
 
 import json
+from typing import Any
 
 import pytest
 from fastapi.testclient import TestClient
@@ -54,7 +55,7 @@ def upload(token: str, docs: list[dict]) -> None:
 
 
 def ask(token: str, question: str, k: int | None = None) -> list[dict]:
-    body = {"question": question}
+    body: dict[str, Any] = {"question": question}
     if k is not None:
         body["k"] = k
     resp = client.post("/ask", headers=auth(token), json=body)
@@ -126,13 +127,15 @@ def test_empty_and_overlong_questions_are_422():
 
 
 def test_answer_is_recorded_as_refused_when_no_context():
-    from knowledge_desk.db import connect
+    from knowledge_desk.db import connect, require_row
 
     token = signup("acme", "o@acme.test")
     answer_id = _by_type(ask(token, "anything?"), "meta")[0]["answer_id"]
     org_id = client.get("/me", headers=auth(token)).json()["org_id"]
     with connect(org_id) as conn:  # RLS: reads need the org context set
-        row = conn.execute("select refused from answers where id = %s", (answer_id,)).fetchone()
+        row = require_row(
+            conn.execute("select refused from answers where id = %s", (answer_id,)).fetchone()
+        )
     assert row["refused"] is True
 
 
