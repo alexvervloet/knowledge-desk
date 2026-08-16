@@ -15,7 +15,7 @@ from __future__ import annotations
 
 import logging
 import secrets
-from collections.abc import Iterator
+from collections.abc import Generator
 from typing import Any
 
 from knowledge_desk import audit, retrieval
@@ -49,7 +49,10 @@ def _limit_block(scope: TenantScope) -> str | None:
 
 def answer_stream(
     scope: TenantScope, question: str, k: int
-) -> Iterator[dict[str, Any]]:
+) -> Generator[dict[str, Any], None, None]:
+    # Generator, not Iterator: closing the stream early is part of the contract.
+    # A caller that walks away mid-answer calls .close(), and the GeneratorExit
+    # that raises inside here is what books the tokens already spent.
     provider = get_answer_provider()
     model = settings.answer_model if provider.name == "claude" else provider.name
     tracer = AskTracer(question, scope.org_id, scope.ctx.user_id, scope.ctx.email,
