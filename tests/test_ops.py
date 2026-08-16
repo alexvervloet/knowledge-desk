@@ -14,7 +14,7 @@ from fastapi.testclient import TestClient
 
 from knowledge_desk import accounts, assistant, ingest
 from knowledge_desk.config import settings
-from knowledge_desk.db import connect
+from knowledge_desk.db import connect, require_row
 from knowledge_desk.errors import QuotaExceeded
 from knowledge_desk.main import app
 from knowledge_desk.providers import MockAnswerProvider
@@ -98,7 +98,9 @@ def test_blocked_question_is_recorded(monkeypatch):
     token = signup("acme", "o@acme.test")
     aid = next(e for e in ask_events(token, "q?") if e["type"] == "meta")["answer_id"]
     with connect(org_of(token)) as conn:  # RLS: reads need the org context set
-        row = conn.execute("select blocked from answers where id = %s", (aid,)).fetchone()
+        row = require_row(
+            conn.execute("select blocked from answers where id = %s", (aid,)).fetchone()
+        )
     assert row["blocked"] is True
 
 
@@ -228,7 +230,7 @@ def test_expired_sessions_are_purged():
     assert client.get("/me", headers=auth(token)).status_code == 401  # already refused
     assert accounts.purge_expired_sessions() == 1
     with connect() as conn:
-        assert conn.execute("select count(*) as n from sessions").fetchone()["n"] == 0
+        assert require_row(conn.execute("select count(*) as n from sessions").fetchone())["n"] == 0
 
 
 def test_concurrent_uploads_cannot_both_pass_the_same_cap(monkeypatch):
@@ -254,9 +256,9 @@ def test_concurrent_uploads_cannot_both_pass_the_same_cap(monkeypatch):
 
     assert "rejected" in results, "6 + 6 documents cannot both fit under a cap of 10"
     with connect(scope.org_id) as conn:
-        total = conn.execute(
+        total = require_row(conn.execute(
             "select count(*) as n from documents where org_id = %s", (scope.org_id,)
-        ).fetchone()["n"]
+        ).fetchone())["n"]
     assert total <= 10
 
 
@@ -285,10 +287,10 @@ def test_answer_records_usage():
     upload(token, [{"path": "doc.txt", "content": "the sky is blue today", "acl": ["public-to-org"]}])
     aid = next(e for e in ask_events(token, "the sky is blue today") if e["type"] == "meta")["answer_id"]
     with connect(org_of(token)) as conn:
-        row = conn.execute(
+        row = require_row(conn.execute(
             "select output_tokens, refused, blocked, usage_estimated"
             " from answers where id = %s", (aid,)
-        ).fetchone()
+        ).fetchone())
     assert row["output_tokens"] > 0 and not row["refused"] and not row["blocked"]
     assert row["usage_estimated"] is False  # reported by the provider, not inferred
 
@@ -298,10 +300,10 @@ def test_answer_records_usage():
 
 def _answer_row(token: str, answer_id: str) -> dict:
     with connect(org_of(token)) as conn:
-        return conn.execute(
+        return require_row(conn.execute(
             "select input_tokens, output_tokens, cost_usd, usage_estimated"
             " from answers where id = %s", (answer_id,)
-        ).fetchone()
+        ).fetchone())
 
 
 def _scope_for(token: str):
