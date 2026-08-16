@@ -553,3 +553,31 @@ output still exists. When any path deletes that output, the key needs a
 generation counter, or the queue will confidently skip work it has undone. And
 the test worth writing after a small change is the one that asks what *else*
 depended on the thing you changed.
+
+## 30. Two type checkers disagreed, and only one of them could be satisfied
+
+Pylance surfaced a handful of errors the CI type check had never reported. The
+reason is coverage, not disagreement: mypy is configured with `files =
+["knowledge_desk"]`, so the 33 errors in `tests/` had simply never been looked
+at by anything. That part was expected once I ran pyright over the whole tree.
+
+The genuine surprise was `migrate.py`. psycopg 3.3 narrowed the type of
+`execute`'s query parameter to `LiteralString`, which makes every runtime-built
+query visible — good change, and the migration runner reads its SQL from disk,
+so it legitimately trips it. The obvious fix is `cast(LiteralString, sql_text)`.
+mypy then rejects that cast as redundant, because mypy erases `LiteralString` to
+`str` in cast targets, and the repo runs `warn_redundant_casts`. Every
+reformulation lands in the same trap: declaring the helper's return type as
+`LiteralString`, annotating the variable, wrapping in `sql.SQL` — mypy sees
+`str` on both sides each time, so a `# type: ignore` there is unused and
+`warn_unused_ignores` fires on it. There is no spelling that both accept.
+
+The way out was a checker-specific pragma, `# pyright: ignore[...]`, which mypy
+does not read at all. Reaching for the narrower tool was right here; a blanket
+`# type: ignore` would have been silently unused under mypy and would have hidden
+future real errors on that line from both.
+
+Takeaway: when two checkers disagree about a line, resist the urge to find the
+one clever spelling that satisfies both — sometimes there isn't one. Suppress
+for the specific checker that is wrong, and write down which one and why, or the
+next person deletes the pragma and re-derives the whole dead end.
