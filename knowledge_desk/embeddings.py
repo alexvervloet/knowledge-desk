@@ -52,9 +52,12 @@ class VoyageEmbedder:
     dim = EMBED_DIM
 
     def __init__(self) -> None:
-        import voyageai  # lazy: only needed when a key is set
+        # Lazy: only needed when a key is set. Imported from the submodule
+        # because voyageai's package __init__ pulls Client in without
+        # re-exporting it, which reads as private to a type checker.
+        from voyageai.client import Client
 
-        self._client = voyageai.Client(api_key=settings.voyage_api_key)
+        self._client = Client(api_key=settings.voyage_api_key)
         self._model = settings.embed_model
 
     def _embed(self, texts: list[str], input_type: str) -> list[list[float]]:
