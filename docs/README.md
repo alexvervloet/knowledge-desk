@@ -44,6 +44,17 @@ learning actually happens.
 | 5 | [03-evals.md](03-evals.md) | Why an eval is not a test, and why these three block merges. | 20 min |
 | 6 | [04-rag-core.md](04-rag-core.md) | What a production retrieval stack adds, and why this one deliberately stops early. | 15 min |
 | 7 | [05-reading-the-history.md](05-reading-the-history.md) | How to mine 207 commits and 29 recorded mistakes for the decisions behind the code. | 30 min |
+| 8 | [levels/](levels/) | Every concept explained five times, to five different readers. Dip in at your level, then read the one above it. | as needed |
+
+## If you are not the reader described above
+
+The path assumes one audience. [levels/](levels/) explains the same system nine
+times over, at five levels each, from a high school intro-to-CS student up to a
+senior AI engineer. Same concepts, same file references, five different
+conversations. Use it if the path above is pitched wrong for you, if you are
+teaching this to somebody else, or if you are preparing for an interview and want
+the level 4 pass, which is written as questions worth asking and the answers that
+should worry you.
 
 ## The shortest useful version
 
