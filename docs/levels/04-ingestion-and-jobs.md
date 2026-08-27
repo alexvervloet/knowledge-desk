@@ -94,8 +94,10 @@ and die before marking it succeeded, in which case the job runs again. So the wo
 has to be idempotent, and it is:
 `process_ingest_document` deletes the document's chunks and reinserts them, so
 running it twice leaves the same rows. Enqueueing is idempotent too, through a
-unique `idempotency_key` of `ingest:{document_id}:{content_hash}` and an
-`on conflict do nothing`.
+unique `idempotency_key` of `ingest:{document_id}:{content_hash}:{revision}` and an
+`on conflict do nothing`. The revision is in there because content reverting to
+an earlier hash still has to re-embed, and a key without it would be treated as
+already done.
 
 That combination, at-least-once delivery plus idempotent handlers, is how almost
 all real queue systems work. Exactly-once is mostly a marketing claim about
