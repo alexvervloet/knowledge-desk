@@ -64,6 +64,12 @@ deliberately omits](docs/04-rag-core.md), and [how to read the build
 history](docs/05-reading-the-history.md) — 200+ commits and 29 written-up
 mistakes.
 
+And [docs/levels/](docs/levels/), which explains every concept in the system five
+times over, to five readers: a high school intro-to-CS student, a second-year
+undergraduate, a CS graduate learning AI, an engineering manager interviewing for
+an AI engineering job, and a senior AI engineer. Same code, same line references,
+five different conversations.
+
 ## Architecture
 
 Ingestion is asynchronous, so embedding never blocks a request. Asking is
