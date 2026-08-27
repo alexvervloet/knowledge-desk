@@ -358,7 +358,7 @@ class TenantScope:
 
     def search(self, query_embedding: list[float], k: int = 5) -> list[dict[str, Any]]:
         """Nearest chunks the caller is allowed to see. The ACL filter is part of
-        the candidate fetch (`d.acl ?| principals`), so a forbidden chunk is never
+        the candidate fetch (`c.acl ?| principals`), so a forbidden chunk is never
         ranked, never scored, and cannot leak through a missed post-filter. The
         org_id filter sits on top as the tenant boundary.
         """
