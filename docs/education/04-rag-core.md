@@ -9,10 +9,10 @@ codebase, and only one of them is engineering.
 
 | Stage | Implementation | Config |
 |---|---|---|
-| Chunking | fixed character windows with overlap ([chunking.py](../knowledge_desk/chunking.py)) | `chunk_size: 1000`, `chunk_overlap: 150` |
-| Embedding | Voyage `voyage-3`, 1024 dims, or a deterministic mock ([embeddings.py](../knowledge_desk/embeddings.py)) | `embed_model` |
+| Chunking | fixed character windows with overlap ([chunking.py](../../knowledge_desk/chunking.py)) | `chunk_size: 1000`, `chunk_overlap: 150` |
+| Embedding | Voyage `voyage-3`, 1024 dims, or a deterministic mock ([embeddings.py](../../knowledge_desk/embeddings.py)) | `embed_model` |
 | Index | none — exact scan with cosine distance | see below |
-| Query | embed, ACL-filtered nearest neighbours ([tenancy.py:359-380](../knowledge_desk/tenancy.py#L359-L380)) | `retrieval_k: 6` |
+| Query | embed, ACL-filtered nearest neighbours ([tenancy.py:359-380](../../knowledge_desk/tenancy.py#L359-L380)) | `retrieval_k: 6` |
 | Rerank | none | |
 | Threshold | none | |
 
@@ -72,7 +72,7 @@ authoritative.
 
 It is a strange gap given the rest of the system's posture: enormous effort went
 into making the assistant refuse when it retrieves *nothing permitted*
-([assistant.py:90-96](../knowledge_desk/assistant.py#L90-L96)), and no effort
+([assistant.py:90-96](../../knowledge_desk/assistant.py#L90-L96)), and no effort
 into refusing when it retrieves *nothing relevant*. Both should end in the same
 honest empty answer.
 
@@ -109,7 +109,7 @@ Under RLS the index was pure cost — build time, write amplification, disk — 
 no read benefit, and it was removed.
 
 The investigation had two false leads, and they are worth more than the
-conclusion ([LESSONS.md](../LESSONS.md) §17). The first guess was that the ACL
+conclusion ([LESSONS.md](../../LESSONS.md) §17). The first guess was that the ACL
 filter was to blame — half right, and fixing it did not fix the problem. The
 second was that pgvector's `cosine_distance` not being marked `LEAKPROOF` blocked
 the planner from pushing it below a security barrier: a tidy, plausible
@@ -118,7 +118,7 @@ and watching nothing change. Two convincing hypotheses, one correct diagnosis
 only because both were tested rather than adopted.
 
 A related finding is recorded in
-[migrations/0009_chunk_acl.sql](../migrations/0009_chunk_acl.sql): the ACL filter
+[migrations/0009_chunk_acl.sql](../../migrations/0009_chunk_acl.sql): the ACL filter
 had to be *denormalised onto the chunk row* for the same class of reason. With
 the predicate on the joined `documents` table, the planner abandons index-ordered
 retrieval because the filter deciding which rows survive lives on a different

@@ -2,7 +2,7 @@
 
 The most valuable teaching material in this repo is not the code. It is the
 record of how the code got that way: over 200 small commits, 29 written-up
-mistakes in [LESSONS.md](../LESSONS.md), and a [CHANGELOG](../CHANGELOG.md)
+mistakes in [LESSONS.md](../../LESSONS.md), and a [CHANGELOG](../../CHANGELOG.md)
 tying them together.
 
 Finished code tells you what someone decided. History tells you what they tried,
@@ -18,7 +18,7 @@ Two habits, deliberately kept:
 is legible in one screen, and a change and its test are adjacent rather than
 buried in a 40-file squash.
 
-**Surprises are written down when they happen.** [LESSONS.md](../LESSONS.md) was
+**Surprises are written down when they happen.** [LESSONS.md](../../LESSONS.md) was
 appended to at the moment each thing went wrong, not reconstructed afterwards.
 That is why the entries contain the false leads — reconstruction quietly deletes
 those, and the false leads are the most useful part.
@@ -46,7 +46,7 @@ and the test that holds it. Read them with `git show <sha>`.
 
 ### 1. The pooled connection that inherits a tenant
 
-**Lesson [§13](../LESSONS.md)** · `44f3dad`, `d009f9b`
+**Lesson [§13](../../LESSONS.md)** · `44f3dad`, `d009f9b`
 
 The tenant context that row-level security keys on was set as a session
 variable. Correct in every test, because tests opened fresh connections. Once
@@ -62,7 +62,7 @@ that test before you write your own concurrency tests.
 
 ### 2. Retrieved documents are the untrusted input
 
-**Lesson [§16](../LESSONS.md)** · `b7cbe85`, `8a18e94`
+**Lesson [§16](../../LESSONS.md)** · `b7cbe85`, `8a18e94`
 
 The moment the system indexed documents that users uploaded, the retrieved text
 became attacker-controlled input flowing into a prompt. `b7cbe85` adds the
@@ -75,7 +75,7 @@ You broke this in [exercise 2](exercises/02-forge-the-delimiters.md).
 
 ### 3. The index that row-level security made useless
 
-**Lesson [§17](../LESSONS.md)** · `d13cd64` → `0423a8f` → `2034eac` → `dde39e2`
+**Lesson [§17](../../LESSONS.md)** · `d13cd64` → `0423a8f` → `2034eac` → `dde39e2`
 
 The best thread in the repo, because it is a negative result that was kept.
 
@@ -93,7 +93,7 @@ looks like, and finished code never shows it.
 
 ### 4. The bill that arrives after the client hangs up
 
-**Lesson [§26](../LESSONS.md)** · `f695719` → `2e5a5c8` → `f537014` → `7d1072e`
+**Lesson [§26](../../LESSONS.md)** · `f695719` → `2e5a5c8` → `f537014` → `7d1072e`
 
 A textbook instance of the pattern above. A stream the client abandons never
 reaches its usage frame, so it was never billed — meaning aborting each request
@@ -107,7 +107,7 @@ missing concept, not a missing line.
 
 ### 5. Per-tenant caps that bounded nothing
 
-**Lesson [§28](../LESSONS.md)** · `7d0f573` → `710a406` → `9afad42` → `cad86f2`
+**Lesson [§28](../../LESSONS.md)** · `7d0f573` → `710a406` → `9afad42` → `cad86f2`
 
 Per-org budgets were in place and working. Then someone asked what bounds the
 *deployment's* spend when signup is open and every new org arrives with a fresh
@@ -165,7 +165,7 @@ learn:
 
 1. **Add the distance threshold** — write the eval first
    ([03-evals.md](03-evals.md)), watch it fail, then fix
-   [`TenantScope.search`](../knowledge_desk/tenancy.py#L359-L380).
+   [`TenantScope.search`](../../knowledge_desk/tenancy.py#L359-L380).
 2. **Add an eval for a property you think is under-defended**, and find out
    whether it holds.
 3. **Read [WALKTHROUGH.md](../WALKTHROUGH.md)'s "Where it will disappoint you"**

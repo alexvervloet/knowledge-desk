@@ -36,7 +36,7 @@ learning actually happens.
 
 | # | Doc | What you get | Time |
 |---|---|---|---|
-| 0 | [Root README](../README.md) → "Run it locally" | The stack running on your machine. It runs keyless with a mock provider, so you need no API keys. | 20 min |
+| 0 | [Root README](../../README.md) → "Run it locally" | The stack running on your machine. It runs keyless with a mock provider, so you need no API keys. | 20 min |
 | 1 | [01-thesis.md](01-thesis.md) | Why the interesting part of an LLM product is not the model call. Read this before the code or the code looks over-engineered. | 10 min |
 | 2 | [WALKTHROUGH.md](../WALKTHROUGH.md) | A narrated trip through one question, end to end, with the branch points and gotchas. | 30 min |
 | 3 | [02-concept-index.md](02-concept-index.md) | Concept → file → line. Use it as a lookup table for the rest. | skim |

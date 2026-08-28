@@ -46,10 +46,10 @@ diff to review. Only a standing check catches it.
 
 ## The three evals here
 
-Read [evals/run.py](../evals/run.py) alongside this — it is 179 lines and the
+Read [evals/run.py](../../evals/run.py) alongside this — it is 179 lines and the
 whole thing is legible in one sitting.
 
-### 1. permission-leak ([run.py:88-108](../evals/run.py#L88-L108))
+### 1. permission-leak ([run.py:88-108](../../evals/run.py#L88-L108))
 
 Sets up the minimum viable version of the real risk: one org, two members, a
 document with `acl: ["user:<x>"]` containing a secret passphrase. Asks as the
@@ -62,14 +62,14 @@ retrieval returned nothing to anybody, which is the failure mode a naive fix
 produces. Half of a good safety eval is proving you did not achieve safety by
 breaking the feature.
 
-### 2. grounded-answer ([run.py:111-120](../evals/run.py#L111-L120))
+### 2. grounded-answer ([run.py:111-120](../../evals/run.py#L111-L120))
 
 Uploads a permitted document that matches the question and asserts it is cited.
 This is the counterweight to eval 1. Together they pin the system between "leaks"
 and "useless", which is the interval any access-controlled retrieval system has to
 stay inside.
 
-### 3. prompt-injection ([run.py:131-155](../evals/run.py#L131-L155))
+### 3. prompt-injection ([run.py:131-155](../../evals/run.py#L131-L155))
 
 Uploads a document containing a forged closing delimiter and a `SYSTEM:` payload,
 then asserts three structural facts: exactly one opening and one closing marker
@@ -94,11 +94,11 @@ Four properties. If you take a checklist from this document, take this one:
    and CI run gets the same result. A gate that only runs when secrets are
    available does not run on the pull requests that need it most.
 3. **Fast, and isolated.** Each eval truncates every table first
-   ([run.py:36-43](../evals/run.py#L36-L43)) — including resetting the auth rate
+   ([run.py:36-43](../../evals/run.py#L36-L43)) — including resetting the auth rate
    limiter, because signing up repeatedly from one address throttles the gate
    against itself. Order-dependent evals are flaky evals wearing a disguise.
 4. **It actually blocks the merge.**
-   [ci.yml:46](../.github/workflows/ci.yml#L46) runs it as a required step, and
+   [ci.yml:46](../../.github/workflows/ci.yml#L46) runs it as a required step, and
    `main` returns nonzero on any failure. An eval you run manually when you
    remember is a diagnostic, not a gate.
 
@@ -113,7 +113,7 @@ Be clear-eyed about this, because the failure was demonstrated in exercise 3.
 security leaves every eval passing, because layers 1 and 2 still produce correct
 behaviour. Outcome checks cannot distinguish three layers from two. That gap is
 covered by a *test* that asserts the layer exists
-([test_governance.py:192-202](../tests/test_governance.py#L192-L202)) — one that
+([test_governance.py:192-202](../../tests/test_governance.py#L192-L202)) — one that
 queries with no tenant context, something no product feature ever does.
 
 The general rule: evals check the promise, targeted tests check the defenses
@@ -146,8 +146,8 @@ def my_property_eval() -> dict[str, Any]:
     return {"name": "my-property", "passed": passed, "detail": f"...={...}"}
 ```
 
-Then add it to [`run_all`](../evals/run.py#L158-L159). It is picked up by the CI
-gate and by [tests/test_evals.py](../tests/test_evals.py), which asserts the same
+Then add it to [`run_all`](../../evals/run.py#L158-L159). It is picked up by the CI
+gate and by [tests/test_evals.py](../../tests/test_evals.py), which asserts the same
 functions locally.
 
 Before you write it, ask the four questions: is it deterministic, does it run
@@ -164,7 +164,7 @@ disappoint you"). Write the eval first: upload a document about refunds, ask abo
 something entirely unrelated, and assert the answer refuses rather than cites.
 
 Watch it fail. Then add a distance cutoff to
-[`TenantScope.search`](../knowledge_desk/tenancy.py#L359-L380) and watch it pass.
+[`TenantScope.search`](../../knowledge_desk/tenancy.py#L359-L380) and watch it pass.
 That is the whole loop — property, gate, fix — on a real gap in a real system.
 
 Next: [04-rag-core.md](04-rag-core.md).
