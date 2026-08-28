@@ -23,7 +23,7 @@
 -- the third and last line of defense against cross-tenant leakage, and accept a
 -- sequential scan on retrieval. Tenant corpora here are small (a scan of one
 -- org's chunks, not the whole table). If a deployment ever outgrows that, the
--- escape hatch is documented in WALKTHROUGH.md: drop the RLS policy on chunks
+-- escape hatch is documented in docs/WALKTHROUGH.md: drop the RLS policy on chunks
 -- and re-create this index, accepting that isolation then rests on the data
 -- layer and the ACL-filtered query alone.
 
