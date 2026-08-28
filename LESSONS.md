@@ -581,3 +581,34 @@ Takeaway: when two checkers disagree about a line, resist the urge to find the
 one clever spelling that satisfies both — sometimes there isn't one. Suppress
 for the specific checker that is wrong, and write down which one and why, or the
 next person deletes the pragma and re-derives the whole dead end.
+
+## 31. Moving a docs folder broke 203 links and nothing noticed
+
+Moving `docs/*.md` into `docs/education/` was a one-line `git mv`, and it looked
+clean: the files were all still there, the tree read better, CI stayed green.
+Every relative link in those files was now wrong. `../knowledge_desk/tenancy.py`
+had meant the repo root and now meant `docs/knowledge_desk/`, which does not
+exist. 203 links, including the whole of the concept index, whose only content
+is file-and-line links.
+
+CI stayed green because nothing in it reads Markdown. Ruff, mypy, pytest and the
+eval gate all pass over a docs tree whose every code reference is a dead end.
+The breakage surfaced only because a later, unrelated move made me grep for
+inbound references.
+
+The fix was mechanical once written down: resolve each broken target against the
+repo root, then re-relativise it to the file's own depth. The files two levels
+down needed `../../`, the ones three levels down `../../../`.
+
+Two smaller things worth keeping. First, `check_links.py` initially scanned line
+by line and reported 203 while the rewrite touched 205. The two it missed had
+link text wrapped across a newline, so `[what the retrieval core\ndeliberately
+omits](...)` never matched a single-line regex. Matching against the whole file
+and computing the line number from the match offset fixed it. Second, the link
+labels lied independently of the targets: `[docs/levels/](docs/education/levels/)`
+resolves fine and still tells the reader the wrong path. A link checker cannot
+catch that one.
+
+Takeaway: a docs reorganisation is a refactor, and an unchecked refactor. If the
+docs carry relative links, the move is not done until a checker walks them, and
+the checker is not trusted until it has been made to fail on purpose.
