@@ -63,6 +63,8 @@ jobs:
         run: ruff check .
       - name: Mypy
         run: mypy
+      - name: Docs links
+        run: python check_links.py
       - name: Audit Python dependencies
         # Advisory: a new CVE in a pinned dep should be visible without blocking
         # unrelated work. Promote to a hard gate once the noise level is known.
