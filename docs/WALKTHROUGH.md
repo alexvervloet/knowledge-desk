@@ -4,8 +4,8 @@ A narrated trip through Knowledge Desk end to end: what happens at each step, th
 decision points where the system could go a different way, the places it will
 surprise you, and the shapes of problem it is and is not good at.
 
-This is not the setup guide (see [README.md](README.md)) and not the build log
-(see [LESSONS.md](LESSONS.md)). Every output quoted here was captured from an
+This is not the setup guide (see [README.md](../README.md)) and not the build log
+(see [LESSONS.md](../LESSONS.md)). Every output quoted here was captured from an
 actual run against the seeded demo data.
 
 You can follow along on the deployment at **https://knowledge-desk.fly.dev**,

@@ -32,7 +32,7 @@ idle, so the first request after a quiet period pays a cold start.
 
 ## Status
 
-Feature complete and deployed. See [WALKTHROUGH.md](WALKTHROUGH.md) for a
+Feature complete and deployed. See [WALKTHROUGH.md](docs/WALKTHROUGH.md) for a
 narrated trip through the app end to end (branch points, gotchas, and what it is
 and is not good at), [LESSONS.md](LESSONS.md) for what the build taught,
 including the mistakes, and [CHANGELOG.md](CHANGELOG.md) for what changed when.
