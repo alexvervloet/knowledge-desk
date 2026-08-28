@@ -21,7 +21,7 @@ budget in an afternoon.
 ## Part A: watch the cap work
 
 The limits are checked in
-[`_limit_block`](../../knowledge_desk/assistant.py#L35-L47) — three of them, in
+[`_limit_block`](../../../knowledge_desk/assistant.py#L35-L47) — three of them, in
 order: this org's rolling 24-hour spend, this org's questions this calendar
 month, and the whole deployment's spend today.
 
@@ -36,7 +36,7 @@ python -m pytest tests/test_ops.py -q -k 'budget or blocked or abandoned'
 ```
 
 Those five tests are worth reading before you change anything
-([tests/test_ops.py:70-150](../../tests/test_ops.py#L70-L150)). To see what a
+([tests/test_ops.py:70-150](../../../tests/test_ops.py#L70-L150)). To see what a
 blocked question looks like on the wire, the SSE frames a caller receives when
 their org is over budget are:
 
@@ -58,13 +58,13 @@ you will have to make in your own system:
 1. **No `sources` frame.** Retrieval never ran. The block happens before any
    work, not just before the model.
 2. **The message is specific.** Unlike the error path
-   ([assistant.py:123-138](../../knowledge_desk/assistant.py#L123-L138)), which
+   ([assistant.py:123-138](../../../knowledge_desk/assistant.py#L123-L138)), which
    deliberately hands the caller an opaque reference because exception text
    leaks database hosts and role names, this message is one *we* wrote and is
    safe to show. "You are over budget" is actionable; "something went wrong" is
    a support ticket.
 3. **The refusal is still recorded.** The answer row is written and marked
-   blocked ([assistant.py:70-73](../../knowledge_desk/assistant.py#L70-L73)),
+   blocked ([assistant.py:70-73](../../../knowledge_desk/assistant.py#L70-L73)),
    and an audit entry is logged. A refusal you cannot count is a refusal you
    cannot debug — when someone reports "it stopped answering", you need the
    number of blocks and their reason, not silence.
@@ -78,11 +78,11 @@ tenant can spend at most $5 a day, is the deployment's daily spend bounded?
 Only if the number of tenants is. **Signup is open.** A fresh org arrives with a
 fresh $5 allowance, so the per-org cap bounds one tenant's spend and says nothing
 whatever about the bill. That is why a third check exists
-([assistant.py:45-46](../../knowledge_desk/assistant.py#L45-L46)), and it is the
+([assistant.py:45-46](../../../knowledge_desk/assistant.py#L45-L46)), and it is the
 only one of the three that actually caps what the deployment can spend in a day.
 
 Delete it and see what notices. In
-[`_limit_block`](../../knowledge_desk/assistant.py#L35-L47), remove:
+[`_limit_block`](../../../knowledge_desk/assistant.py#L35-L47), remove:
 
 ```python
     if scope.platform_spend_today() >= settings.platform_daily_budget_usd:
@@ -102,7 +102,7 @@ FAILED tests/test_ops.py::test_platform_budget_blocks_an_org_that_is_under_its_o
 
 The other four still pass — the per-org caps are untouched and working
 perfectly. The failing test
-([tests/test_ops.py:129-145](../../tests/test_ops.py#L129-L145)) is the only one
+([tests/test_ops.py:129-145](../../../tests/test_ops.py#L129-L145)) is the only one
 that encodes the reasoning above: it spends past the platform ceiling as one org,
 then asks as a **brand new org that has not spent a cent of its own allowance**,
 and demands a refusal:
@@ -127,7 +127,7 @@ git checkout knowledge_desk/assistant.py
 ## Part C: the bill that arrives after the client leaves
 
 The last trap needs no edit — just read
-[assistant.py:139-153](../../knowledge_desk/assistant.py#L139-L153) and work out
+[assistant.py:139-153](../../../knowledge_desk/assistant.py#L139-L153) and work out
 why the `finally` block is there.
 
 Billing happens when the provider emits its `usage` frame, which is the last
@@ -150,7 +150,7 @@ Two general points hide in that block:
   measurement, indistinguishable, is how a cost dashboard becomes untrustworthy.
 
 Covered by
-[test_abandoned_stream_counts_toward_the_org_budget](../../tests/test_ops.py#L342).
+[test_abandoned_stream_counts_toward_the_org_budget](../../../tests/test_ops.py#L342).
 
 ## Restore
 

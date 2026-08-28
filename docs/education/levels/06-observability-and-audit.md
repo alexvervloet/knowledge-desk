@@ -37,7 +37,7 @@ the question into the audit log, the card number is now in the log, forever, and
 the log is a thing lots of people can read. So before writing an audit entry, the
 program scans the text for things that look like emails, phone numbers, social
 security numbers, and card numbers, and replaces them with tags like
-`[REDACTED-EMAIL]`. That is [pii.py](../../knowledge_desk/pii.py), 36 lines of
+`[REDACTED-EMAIL]`. That is [pii.py](../../../knowledge_desk/pii.py), 36 lines of
 patterns.
 
 And one more, which is my favourite detail in this whole project. When something
@@ -54,7 +54,7 @@ the username the program was logging in with.
 
 Three mechanisms, three audiences, three different rules.
 
-Tracing, in [tracing.py](../../knowledge_desk/tracing.py). One trace per
+Tracing, in [tracing.py](../../../knowledge_desk/tracing.py). One trace per
 question, sent to Langfuse. The structure is a root span called `ask`, containing
 a `retrieval` span and a `generation` span. The retrieval span records the
 sources chosen. The generation span records the model, the input, the streamed
@@ -73,14 +73,14 @@ worse than no observability, because it converts a monitoring outage into a
 customer outage. The class checks `self._root is None` at the top of each method
 and returns, so the whole feature switches off cleanly.
 
-Audit, in [audit.py](../../knowledge_desk/audit.py). An append-only table of
+Audit, in [audit.py](../../../knowledge_desk/audit.py). An append-only table of
 `(org_id, actor_user_id, action, detail, timestamp)`. Best-effort by design: a
 failure prints a warning and does not propagate, with the trade-off stated in the
 docstring. A dropped write is a gap in the log, not a failed request. That is a
 judgement call and the opposite choice is defensible for a compliance product;
 what matters is that somebody made it deliberately.
 
-PII redaction, in [pii.py](../../knowledge_desk/pii.py). Four regexes: email,
+PII redaction, in [pii.py](../../../knowledge_desk/pii.py). Four regexes: email,
 SSN, credit-card-shaped digits, US phone. `redact_detail` walks one level of a
 dict and redacts string values before the audit write. Note the comment on
 pattern order: SSN is checked before phone so `NNN-NN-NNNN` is not mislabelled.
@@ -88,7 +88,7 @@ Ordering-dependent regex sets are exactly the sort of thing that quietly breaks
 when someone appends a new pattern, and the comment is what stops that.
 
 Error handling, in
-[assistant.py:123-138](../../knowledge_desk/assistant.py#L123-L138):
+[assistant.py:123-138](../../../knowledge_desk/assistant.py#L123-L138):
 
 ```python
 reference = secrets.token_hex(4)
@@ -114,7 +114,7 @@ That reframes what belongs in it. You need enough to reconstruct the input, not
 just measure the output.
 
 The detail I would point at as the good idea here is
-[`retrieval_stats()`](../../knowledge_desk/tenancy.py#L341) landing on the
+[`retrieval_stats()`](../../../knowledge_desk/tenancy.py#L341) landing on the
 retriever span. It records two numbers: how many ingested chunks the org has, and
 how many of them this caller was permitted to see. The gap between those is the
 ACL filter made observable.
@@ -134,7 +134,7 @@ broken configuration look identical.
 Second thing at this level: the asymmetry between the audit log and stored
 questions. Audit detail is PII-redacted. The question text stored in `answers` is
 not, and the reasoning is written out at
-[tenancy.py:384-396](../../knowledge_desk/tenancy.py#L384-L396). An audit entry is
+[tenancy.py:384-396](../../../knowledge_desk/tenancy.py#L384-L396). An audit entry is
 metadata about an action, where a stray email address is incidental and redacting
 it costs nothing. A question is the content. Redact it and `top_queries` shows
 `[REDACTED-EMAIL]` and an answer can no longer be traced back to what was asked.
@@ -206,7 +206,7 @@ quality complaint into a five-minute fix, and it costs two count queries.
 
 ## Level 5: senior AI engineer
 
-[tracing.py](../../knowledge_desk/tracing.py) is 129 lines and the discipline in
+[tracing.py](../../../knowledge_desk/tracing.py) is 129 lines and the discipline in
 it is the interesting part. `AskTracer` holds `_root`, `_retrieval`, `_gen`, and
 every public method guards on `_root is None` and wraps its body in try/except
 with `log.exception`. Init failure sets `_root = None` and the whole feature
@@ -253,7 +253,7 @@ customer document content. That is a defensible product decision and an
 indefensible surprise, so it belongs in the docs rather than only in the code.
 
 The best single line in this area is the reasoning at
-[tenancy.py:384-396](../../knowledge_desk/tenancy.py#L384-L396) for why questions
+[tenancy.py:384-396](../../../knowledge_desk/tenancy.py#L384-L396) for why questions
 are stored unredacted while audit detail is not. It states the asymmetry, gives
 the mechanism that would break under the alternative, names who can read the
 data, and then says plainly that this is where user-typed text accumulates in the

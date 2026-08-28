@@ -27,7 +27,7 @@ this person is not allowed to read?
 Those are yes-or-no questions, and they stay yes-or-no no matter how the wording
 changes. Checks like that are called evals.
 
-There are three of them here, in [evals/run.py](../../evals/run.py), and they run
+There are three of them here, in [evals/run.py](../../../evals/run.py), and they run
 the real program, not a pretend version. Each one creates a fresh company,
 creates users, uploads documents, asks a question, and inspects what came back.
 
@@ -48,7 +48,7 @@ the change is a suggestion, and suggestions lose to deadlines.
 An eval is a test for behaviour that is not deterministic. You assert an
 invariant, not an output.
 
-Three of them, in [evals/run.py](../../evals/run.py), run against the real
+Three of them, in [evals/run.py](../../../evals/run.py), run against the real
 FastAPI app through `TestClient`, with a real Postgres and the real job queue
 drained via `ingest.run_pending()`.
 
@@ -89,7 +89,7 @@ so they are meaningful even against the mock provider, which means they run in C
 with no API key and no cost and no flakiness.
 
 `main()` prints a report and returns 1 if any eval failed. It is a required step
-in [.github/workflows/ci.yml:46](../../.github/workflows/ci.yml#L46), so a
+in [.github/workflows/ci.yml:46](../../../.github/workflows/ci.yml#L46), so a
 nonzero exit blocks the merge.
 
 ---
@@ -236,7 +236,7 @@ assert a row exists with `estimated = true`.
 
 No eval asserting the ACL denormalisation stays consistent. Change a document's
 ACL, assert every chunk's ACL matches. The two-copies-of-the-truth problem from
-[migrations/0009_chunk_acl.sql](../../migrations/0009_chunk_acl.sql) is the most
+[migrations/0009_chunk_acl.sql](../../../migrations/0009_chunk_acl.sql) is the most
 likely source of a future permission bug in this codebase, and it is trivially
 assertable.
 

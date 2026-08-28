@@ -33,7 +33,7 @@ nothing to compare against, so it gives up right away. If the account does exist
 the program runs slow bcrypt and takes a quarter of a second. The message is the
 same. The timing is not. Four milliseconds means no account, 240 milliseconds
 means there is one. That measured difference is real, it is in the code comment
-at [auth.py:41-52](../../knowledge_desk/auth.py#L41-L52), and it lets somebody
+at [auth.py:41-52](../../../knowledge_desk/auth.py#L41-L52), and it lets somebody
 build a list of who works at the company.
 
 The fix is small and slightly funny. When there is no such user, the program
@@ -49,7 +49,7 @@ steal a live login.
 
 ## Level 2: second-year CS undergraduate
 
-[auth.py](../../knowledge_desk/auth.py) is 65 lines and each part is there for a
+[auth.py](../../../knowledge_desk/auth.py) is 65 lines and each part is there for a
 stated reason.
 
 Password hashing is bcrypt over a sha256 pre-hash, base64 encoded:
@@ -67,7 +67,7 @@ theoretical one, and it hits exactly the users who took your advice about long
 passphrases. Base64 is there because bcrypt also stops at a null byte, and a raw
 sha256 digest can contain one.
 
-Timing-safe misses, via [`dummy_hash()`](../../knowledge_desk/auth.py#L41-L52). A
+Timing-safe misses, via [`dummy_hash()`](../../../knowledge_desk/auth.py#L41-L52). A
 real bcrypt hash of a random string, cached with `functools.cache`, verified
 against on the user-not-found path so a miss costs the same as a hit. The
 docstring gives the measured numbers: about 4ms versus about 240ms. That is a
@@ -94,12 +94,12 @@ That is worth copying.
 
 The placement decision matters more than the mechanism. Role gates live in the
 data layer, on `TenantScope`, at
-[tenancy.py:46-62](../../knowledge_desk/tenancy.py#L46-L62), not in the route
+[tenancy.py:46-62](../../../knowledge_desk/tenancy.py#L46-L62), not in the route
 handlers. A new endpoint that calls `scope.create_group()` gets the admin check
 whether or not its author remembered one. Put the check in the route and you are
 relying on every future route author.
 
-Errors, in [errors.py](../../knowledge_desk/errors.py). Five domain exception
+Errors, in [errors.py](../../../knowledge_desk/errors.py). Five domain exception
 types mapped to HTTP status codes at one edge. Handlers raise `Forbidden`, not
 `HTTPException(403)`. One mapping means status codes cannot drift, and the data
 layer does not have to know it is behind HTTP.
@@ -115,7 +115,7 @@ this file establishes, so a privilege escalation here becomes a retrieval leak t
 files away, which becomes a fluent cited paragraph in front of the wrong person.
 
 The piece I would single out is
-[`require_can_grant`](../../knowledge_desk/tenancy.py#L50-L62), because the
+[`require_can_grant`](../../../knowledge_desk/tenancy.py#L50-L62), because the
 reasoning is not obvious until it is written down:
 
 ```python
@@ -226,7 +226,7 @@ returns on the login path, an inactive membership, a bad org slug, a rate-limit
 rejection, can reintroduce a timing difference. Nothing currently checks that.
 
 The `auth_limiter` split from the general limiter is right and the reasoning is
-in [ratelimit.py](../../knowledge_desk/ratelimit.py): the auth routes are the only
+in [ratelimit.py](../../../knowledge_desk/ratelimit.py): the auth routes are the only
 endpoints an anonymous caller can reach, each costs a bcrypt verification, and
 keying by client address rather than user id is the only option before identity
 exists. That also means a slow hash is a denial-of-service amplifier without it,

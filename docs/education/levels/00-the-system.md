@@ -17,7 +17,7 @@ Knowledge Desk fixes that in two steps.
 
 First, it chops every document into small pieces, about a paragraph each. The
 code that does this is 33 lines long, in
-[chunking.py](../../knowledge_desk/chunking.py). Each piece is called a chunk.
+[chunking.py](../../../knowledge_desk/chunking.py). Each piece is called a chunk.
 
 Second, it turns each chunk into a long list of numbers. Not the letters, the
 meaning. Picture a map where every sentence is a pin. Sentences about refunds
@@ -57,7 +57,7 @@ each with a `text` column and an `embedding` column, where the embedding is a
 1,024-dimensional float vector stored in Postgres by the pgvector extension.
 Retrieval is a nearest-neighbour query under cosine distance, written in SQL with
 the `<=>` operator, in
-[tenancy.py:359-380](../../knowledge_desk/tenancy.py#L359-L380).
+[tenancy.py:359-380](../../../knowledge_desk/tenancy.py#L359-L380).
 
 You already know what makes that expensive. Exact nearest neighbour over N rows
 is O(N) distance computations per query, and each one touches 1,024 floats. So
@@ -70,7 +70,7 @@ The architecture is the shape you would sketch on a whiteboard for any web app:
 
 - A FastAPI service handles HTTP. Login, upload, ask.
 - Postgres holds everything, including the job queue. No Redis, no broker.
-- A second process, [worker.py](../../knowledge_desk/worker.py), 52 lines, drains
+- A second process, [worker.py](../../../knowledge_desk/worker.py), 52 lines, drains
   that queue and does the slow work.
 - A React single-page app talks to the API.
 
@@ -88,7 +88,7 @@ Every query in this system carries an organisation id. Not by convention, not
 because each handler remembers. Every org-scoped read and write goes through one
 class, `TenantScope`, and that class stamps the id on. The reason is stated in
 the module docstring at the top of
-[tenancy.py](../../knowledge_desk/tenancy.py): if a query touches org data and is
+[tenancy.py](../../../knowledge_desk/tenancy.py): if a query touches org data and is
 not a method on that class, that is the bug. It turns "did we leak data" from a
 question about the whole codebase into a question about one file.
 
@@ -106,9 +106,9 @@ model to answer from them. You have probably built it. It works on a laptop in a
 afternoon.
 
 Here is the ratio that reframes the job. That loop is
-[chunking.py](../../knowledge_desk/chunking.py) (33 lines),
-[embeddings.py](../../knowledge_desk/embeddings.py) (79), and
-[retrieval.py](../../knowledge_desk/retrieval.py) (17). One hundred and
+[chunking.py](../../../knowledge_desk/chunking.py) (33 lines),
+[embeddings.py](../../../knowledge_desk/embeddings.py) (79), and
+[retrieval.py](../../../knowledge_desk/retrieval.py) (17). One hundred and
 twenty-nine lines out of 3,186. Four percent. And it is the four percent with the
 fewest interesting failure modes: the worst thing that happens is a network
 timeout, and you could swap the whole thing for a different library between
@@ -125,7 +125,7 @@ convention the model chooses to honour rather than a rule a parser enforces. A
 document containing `SYSTEM: ignore all previous instructions` is an injection
 attack whose interpreter is a neural network and whose escaping rules are
 probabilistic. The defense is in
-[providers.py:47-77](../../knowledge_desk/providers.py#L47-L77) and it is worth
+[providers.py:47-77](../../../knowledge_desk/providers.py#L47-L77) and it is worth
 reading because it is so unsatisfying compared to parameterised SQL.
 
 Wrong output is not an error. Your training says a bug throws, or returns a
@@ -133,7 +133,7 @@ wrong value you can assert against. A model that answers a question about
 Acme's refund policy using a passage it should never have retrieved returns a
 fluent, well-cited, entirely plausible paragraph. Nothing raises. Nothing logs.
 The only way you find out is if you asserted the property in advance, which is
-what [evals/](../../evals/) is for.
+what [evals/](../../../evals/) is for.
 
 Permission and ranking interact. This is the one I would put money on you not
 having thought about. If you retrieve top-5 and then filter out the ones the
@@ -202,7 +202,7 @@ silently returns short result sets rather than failing.
 per-customer cap. A strong answer notices that per-customer caps bound one
 customer, and that with open signup they do not bound the bill at all, so there
 has to be a deployment-wide ceiling underneath. That is
-[tenancy.py:444](../../knowledge_desk/tenancy.py#L444) here, and it was added
+[tenancy.py:444](../../../knowledge_desk/tenancy.py#L444) here, and it was added
 late, which is normal.
 
 "How do you know your last deploy did not reintroduce a data leak?" If the answer
@@ -235,12 +235,12 @@ because the predicate deciding survival lives on a different relation. It falls
 back to a full scan and sort. Isolating the predicates showed the join, the
 `org_id` filter, and the `status` filter all keep the index, and only the
 cross-table ACL check breaks it. The write-up is in
-[migrations/0009_chunk_acl.sql](../../migrations/0009_chunk_acl.sql). The cost is
+[migrations/0009_chunk_acl.sql](../../../migrations/0009_chunk_acl.sql). The cost is
 a denormalised copy that `update_document_acl` has to keep in sync, which is a
 real liability and the kind of thing that rots.
 
 `hnsw.iterative_scan = relaxed_order`, set per physical connection in
-[db.py](../../knowledge_desk/db.py). Without it a filtered HNSW search returns k
+[db.py](../../../knowledge_desk/db.py). Without it a filtered HNSW search returns k
 candidates, the ACL predicate removes most of them, and the caller silently gets
 three results when they asked for five. This is the single most under-discussed
 failure mode in filtered vector search and it degrades quality without ever
@@ -267,7 +267,7 @@ client that walks away mid-answer raises `GeneratorExit` inside it, and the
 unbilled, aborting each request just before the usage frame is a free-tokens
 exploit. It only books when something was actually streamed, so a pre-first-token
 failure does not invent a charge. See
-[assistant.py:139-153](../../knowledge_desk/assistant.py#L139-L153).
+[assistant.py:139-153](../../../knowledge_desk/assistant.py#L139-L153).
 
 Where I think it is still weak: the rate limiter is in-process, so it is per
 worker rather than per deployment, and the platform spend ceiling is a read of

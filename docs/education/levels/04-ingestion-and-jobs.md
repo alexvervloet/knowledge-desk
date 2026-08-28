@@ -28,7 +28,7 @@ immediately.
 A second program, running all the time on its own, reads that list. It takes the
 oldest note, does the slow work, and crosses the note off. Then it takes the next
 one. When the list is empty it waits two seconds and looks again. That program is
-[worker.py](../../knowledge_desk/worker.py) and it is 52 lines long.
+[worker.py](../../../knowledge_desk/worker.py) and it is 52 lines long.
 
 The list is called a queue and this pattern is everywhere. Your food delivery
 order, the video you uploaded, the photo being backed up. Anything where the app
@@ -50,7 +50,7 @@ note as broken, so a human can look at it. What it never does is quietly forget.
 
 ## Level 2: second-year CS undergraduate
 
-The split is in [ingest.py](../../knowledge_desk/ingest.py). `sync_documents`
+The split is in [ingest.py](../../../knowledge_desk/ingest.py). `sync_documents`
 runs on the request path. `process_ingest_document` runs in the worker.
 
 `sync_documents` is a reconcile, not an append. The uploaded set is the complete
@@ -60,12 +60,12 @@ That is a meaningfully different API from "add this document", and it is the
 right one, because it makes re-running a sync harmless.
 
 Change detection is a sha256 of the content,
-[`_hash`](../../knowledge_desk/ingest.py#L28-L30). Byte-identical content costs
+[`_hash`](../../../knowledge_desk/ingest.py#L28-L30). Byte-identical content costs
 nothing: no chunking, no embedding, no API call. On a corpus that mostly does not
 change, a nightly sync is close to free.
 
 The queue is a Postgres table. No Redis, no RabbitMQ, no Celery. The claim is one
-statement, in [jobs.py:48-63](../../knowledge_desk/jobs.py#L48-L63):
+statement, in [jobs.py:48-63](../../../knowledge_desk/jobs.py#L48-L63):
 
 ```sql
 update jobs set status = 'running', attempts = attempts + 1, updated_at = now()
@@ -83,7 +83,7 @@ transaction instead of waiting on them. So ten workers running this at once each
 claim a different job, with no coordination and no broker. The database is already
 solving mutual exclusion for you, and you are allowed to use it.
 
-Retry, in [jobs.py:73-101](../../knowledge_desk/jobs.py#L73-L101): on failure,
+Retry, in [jobs.py:73-101](../../../knowledge_desk/jobs.py#L73-L101): on failure,
 if attempts remain, the row goes back to `queued` with `run_after = now() +
 backoff`, where backoff is `min(300, 2 ** attempts)` seconds. Exponential, capped
 at five minutes. When attempts run out, status becomes `dead`, which is the
@@ -111,13 +111,13 @@ The parts specific to an embedding pipeline, rather than to queues in general.
 
 Ingestion is where money is spent per byte. Embedding is a paid API call
 proportional to corpus size, so the hash check at
-[ingest.py:66-76](../../knowledge_desk/ingest.py#L66-L76) is not a tidiness
+[ingest.py:66-76](../../../knowledge_desk/ingest.py#L66-L76) is not a tidiness
 feature, it is the difference between a sync that costs nothing and a sync that
 re-embeds a 50,000 chunk corpus every night. Any RAG system without content-hash
 change detection is quietly burning money on a schedule.
 
 The `zip(texts, embeddings, strict=True)` at
-[ingest.py:152-156](../../knowledge_desk/ingest.py#L152-L156) deserves the
+[ingest.py:152-156](../../../knowledge_desk/ingest.py#L152-L156) deserves the
 comment it has. Without `strict`, a short embedding list truncates silently, the
 document is marked ingested holding a subset of its chunks, and you have a
 permanent invisible hole in retrieval for that document. Nothing downstream would
@@ -146,7 +146,7 @@ throughput. Those two decisions were made months apart in different files, and
 nothing would have warned you.
 
 Failure containment is per document, at
-[ingest.py:203](../../knowledge_desk/ingest.py#L203). One document that cannot be
+[ingest.py:203](../../../knowledge_desk/ingest.py#L203). One document that cannot be
 embedded, perhaps because the provider rejects its content, marks itself failed
 and the rest of the batch proceeds. The alternative, failing the batch, means one
 malformed file blocks a customer's entire corpus, which is the sort of thing that
@@ -211,7 +211,7 @@ locked`, exponential backoff capped at 300s, dead letter on attempt exhaustion,
 idempotency key on enqueue. Nothing to argue with in the mechanism.
 
 The `jobs` table's exemption from RLS is documented at the top of
-[jobs.py](../../knowledge_desk/jobs.py) and the argument is sound: the claim is
+[jobs.py](../../../knowledge_desk/jobs.py) and the argument is sound: the claim is
 necessarily tenant-blind, and the tenant context is established after the claim
 from the job's own `org_id`. The residual risk is that nothing verifies the
 document actually belongs to the org the job named. `process_ingest_document`

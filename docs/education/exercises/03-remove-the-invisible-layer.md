@@ -12,10 +12,10 @@ you skip the others.
 Knowledge Desk enforces tenant isolation three separate times:
 
 1. The data layer stamps `org_id` onto every query
-   ([tenancy.py](../../knowledge_desk/tenancy.py)).
+   ([tenancy.py](../../../knowledge_desk/tenancy.py)).
 2. Retrieval filters by the caller's ACL inside the ranking query (exercise 1).
 3. Postgres row-level security denies by default underneath both
-   ([migrations/0007_rls.sql](../../migrations/0007_rls.sql)).
+   ([migrations/0007_rls.sql](../../../migrations/0007_rls.sql)).
 
 Layer 3 is the one you cannot bypass by writing a new query, because it is
 enforced by the database rather than by remembering to add a `where` clause. It
@@ -27,9 +27,9 @@ Two pieces, and the second is where this exercise lives.
 
 **The policies.** Every org-scoped table gets `force row level security` and a
 policy that compares the row's `org_id` against a session variable
-([migrations/0007_rls.sql:32-34](../../migrations/0007_rls.sql#L32-L34)). The
+([migrations/0007_rls.sql:32-34](../../../migrations/0007_rls.sql#L32-L34)). The
 application sets that variable per transaction
-([db.py:1-16](../../knowledge_desk/db.py#L1-L16)). No variable set means no rows
+([db.py:1-16](../../../knowledge_desk/db.py#L1-L16)). No variable set means no rows
 match, so the default is deny.
 
 **The role.** Postgres does not apply RLS policies to a superuser, to a table's
@@ -105,7 +105,7 @@ FAILED tests/test_governance.py::test_rls_blocks_query_without_org_context
 ```
 
 Look at what
-[that test](../../tests/test_governance.py#L192-L202) asserts. It does not ask
+[that test](../../../tests/test_governance.py#L192-L202) asserts. It does not ask
 "can user A read user B's documents" — every other check already covers that. It
 opens a connection **with no tenant context at all**, runs a bare
 `select count(*) from documents`, and demands the answer be zero.
@@ -118,7 +118,7 @@ evaporates.
 ## Why this is not hypothetical
 
 This exact thing nearly shipped, and it is written up in
-[LESSONS.md](../../LESSONS.md) §22. Managed Postgres providers give you an
+[LESSONS.md](../../../LESSONS.md) §22. Managed Postgres providers give you an
 owner-ish role by default — Neon's `neondb_owner` has `rolbypassrls = true`.
 Deploying with the credential the provider hands you would have removed layer 3
 in production while every local test stayed green, because locally the app role

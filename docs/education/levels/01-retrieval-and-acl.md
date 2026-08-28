@@ -30,7 +30,7 @@ Knowledge Desk does it the good way, and the whole trick is that the permission
 check and the "find the closest matches" step happen in the same operation
 instead of one after the other. In code that means one database query does both
 things at once. You can read it at
-[tenancy.py:359-380](../../knowledge_desk/tenancy.py#L359-L380). It is about
+[tenancy.py:359-380](../../../knowledge_desk/tenancy.py#L359-L380). It is about
 eight lines.
 
 There is a second reason the good way is better, and it is the serious one. In
@@ -60,7 +60,7 @@ HNSW index over that column to make it approximate and fast.
 
 The permission filter. Chunks carry an `acl` column, a JSONB array of strings.
 The caller's access set is computed by
-[`principals()`](../../knowledge_desk/tenancy.py#L325-L340) and is exactly:
+[`principals()`](../../../knowledge_desk/tenancy.py#L325-L340) and is exactly:
 
 ```
 ["public-to-org", "user:<their id>", "group:<g1>", "group:<g2>", ...]
@@ -99,12 +99,12 @@ The predicate reads `c.acl`, on chunks, even though permission is a property of
 the document. The ACL is copied down onto every chunk of that document. You have
 been taught that this is denormalisation and that denormalisation is a smell, and
 usually it is. Here it is a performance requirement, and the reasoning is written
-out at [migrations/0009_chunk_acl.sql](../../migrations/0009_chunk_acl.sql). The
+out at [migrations/0009_chunk_acl.sql](../../../migrations/0009_chunk_acl.sql). The
 short version: the filter has to live on the same table as the vector or the
 index cannot help.
 
 The API layer above this is deliberately tiny.
-[retrieval.py](../../knowledge_desk/retrieval.py) is 17 lines, and its function
+[retrieval.py](../../../knowledge_desk/retrieval.py) is 17 lines, and its function
 body is two: embed the query, hand it to the scope. There is nowhere in it to put
 a security bug.
 
@@ -154,7 +154,7 @@ a proximity graph and returns roughly the k nearest. If you attach a selective
 filter, the naive implementation collects k graph candidates and then discards
 the ones failing the predicate, so you are back to short result sets, just one
 layer lower. pgvector's answer is iterative scan, enabled here per connection in
-[db.py](../../knowledge_desk/db.py):
+[db.py](../../../knowledge_desk/db.py):
 
 ```python
 conn.execute("set hnsw.iterative_scan = relaxed_order")
@@ -168,7 +168,7 @@ whole time.
 
 One more thing you will not have thought about: the gap between "chunks this org
 has" and "chunks this caller may see" is itself a number worth recording.
-[`retrieval_stats()`](../../knowledge_desk/tenancy.py#L341) computes both counts
+[`retrieval_stats()`](../../../knowledge_desk/tenancy.py#L341) computes both counts
 and they land on the trace's retriever span. When someone reports that the
 assistant is useless, the first question is whether retrieval failed or whether
 that person is allowed to see eleven chunks out of nine thousand. Those look
@@ -232,7 +232,7 @@ described above.
 
 ## Level 5: senior AI engineer
 
-The query is [tenancy.py:359-380](../../knowledge_desk/tenancy.py#L359-L380).
+The query is [tenancy.py:359-380](../../../knowledge_desk/tenancy.py#L359-L380).
 Filter and ranking in one statement, `c.acl ?| principals` alongside
 `order by c.embedding <=> vec limit k`, org id on top as the tenant boundary.
 Nothing surprising in the shape. The interesting content is in the three
@@ -244,7 +244,7 @@ corpus, because the relation deciding row survival is not the relation carrying
 the ordered index. Isolating each predicate showed the join itself, `org_id`, and
 `status` all keep the index in play, and only the cross-table ACL check breaks
 it. Full note in
-[migrations/0009_chunk_acl.sql](../../migrations/0009_chunk_acl.sql).
+[migrations/0009_chunk_acl.sql](../../../migrations/0009_chunk_acl.sql).
 
 The liability this creates is a synchronisation obligation: `update_document_acl`
 has to fan a permission change out to every chunk of that document. That is the
@@ -260,7 +260,7 @@ thirteen minutes with the index present, seconds without. Build the graph after
 the data settles. That generalises to any vector-indexed table you ever backfill.
 
 Iterative scan. `hnsw.iterative_scan = relaxed_order`, session-scoped per
-physical connection in [db.py](../../knowledge_desk/db.py). This sits directly
+physical connection in [db.py](../../../knowledge_desk/db.py). This sits directly
 next to the transaction-scoped tenant GUC and the contrast is deliberate: this
 setting is identical for every tenant so pooled reuse is correct, the tenant
 context is not so pooled reuse would be a leak. Two settings, same connection,

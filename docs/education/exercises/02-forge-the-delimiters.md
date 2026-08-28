@@ -21,24 +21,24 @@ that looks least important.
 
 ## The three parts
 
-Read [providers.py:27-77](../../knowledge_desk/providers.py#L27-L77) first:
+Read [providers.py:27-77](../../../knowledge_desk/providers.py#L27-L77) first:
 
 1. **A system prompt that names the boundary.** It tells the model the passages
    are untrusted data, may imitate system prompts, and that instructions inside
-   them are never followed ([providers.py:27-45](../../knowledge_desk/providers.py#L27-L45)).
+   them are never followed ([providers.py:27-45](../../../knowledge_desk/providers.py#L27-L45)).
 2. **Explicit markers** — `<<<UNTRUSTED_DOCUMENT>>>` and its closing form — so
    "the passages" is something the model can actually locate in the text, rather
-   than a vague reference ([providers.py:47-48](../../knowledge_desk/providers.py#L47-L48)).
+   than a vague reference ([providers.py:47-48](../../../knowledge_desk/providers.py#L47-L48)).
 3. **Neutralisation of forged markers**, so a document cannot contain the closing
    marker and thereby appear to end early
-   ([providers.py:51-52](../../knowledge_desk/providers.py#L51-L52)).
+   ([providers.py:51-52](../../../knowledge_desk/providers.py#L51-L52)).
 
 Part 3 is four lines and looks like paranoia. It is the part that makes parts 1
 and 2 mean anything.
 
 ## The edit
 
-Open [providers.py:51-52](../../knowledge_desk/providers.py#L51-L52) and make
+Open [providers.py:51-52](../../../knowledge_desk/providers.py#L51-L52) and make
 `_neutralize` a passthrough:
 
 ```python
@@ -73,7 +73,7 @@ eval gate
 ## What happened
 
 The eval uploads a document
-([evals/run.py:123-128](../../evals/run.py#L123-L128)) that looks like ordinary
+([evals/run.py:123-128](../../../evals/run.py#L123-L128)) that looks like ordinary
 policy text and then contains this:
 
 ```
@@ -110,7 +110,7 @@ comply. That test would be worthless here, for reasons worth internalising:
 So the eval asserts what the *code* guarantees, not what the model chooses:
 exactly one opening and one closing marker survive, and the untrusted region
 opens before the payload
-([evals/run.py:148-152](../../evals/run.py#L148-L152)). Those are structural
+([evals/run.py:148-152](../../../evals/run.py#L148-L152)). Those are structural
 properties, deterministic, and true regardless of which model is behind the
 provider.
 

@@ -18,7 +18,7 @@ ranks. Here is what it costs you when it does not.
 
 ## The edit
 
-Open [tenancy.py:372-379](../../knowledge_desk/tenancy.py#L372-L379) in
+Open [tenancy.py:372-379](../../../knowledge_desk/tenancy.py#L372-L379) in
 `TenantScope.search`. Remove the ACL predicate and its parameter:
 
 ```python
@@ -59,7 +59,7 @@ Exit code 1, so CI would refuse the merge.
 
 ## What happened
 
-The [permission-leak eval](../../evals/run.py#L88-L108) sets up the smallest
+The [permission-leak eval](../../../evals/run.py#L88-L108) sets up the smallest
 possible version of the real situation: one org, two members, and a document
 carrying `acl: ["user:<x>"]` whose content is a secret passphrase. It then asks
 as user Y and checks three things — does `/search` return the path, does the
@@ -102,7 +102,7 @@ in a way that will cost you a week when it eventually bites:
 - **The forbidden text still crossed a boundary.** It was read out of the
   database and into your process. Every future logging statement, trace, cache,
   or debug dump between the fetch and the filter is a new place for it to escape.
-  Compare [tracing.py](../../knowledge_desk/tracing.py), which serialises
+  Compare [tracing.py](../../../knowledge_desk/tracing.py), which serialises
   retrieval results.
 - **Safety now depends on a line that looks like formatting.** A refactor that
   moves the return, an early exit, a second call site that forgets the
@@ -110,13 +110,13 @@ in a way that will cost you a week when it eventually bites:
   test that exists.
 
 The real query keeps the filter and the ranking together
-([tenancy.py:359-380](../../knowledge_desk/tenancy.py#L359-L380)), so `k` means
+([tenancy.py:359-380](../../../knowledge_desk/tenancy.py#L359-L380)), so `k` means
 what it says and there is no window in which forbidden text exists in memory.
 Getting there needed a schema change: the ACL is denormalised onto the chunk row
 so the predicate and the vector live on the same relation, because a filter on
 the joined `documents` table makes the planner abandon the index entirely. The
 measurement and the reasoning are in
-[migrations/0009_chunk_acl.sql](../../migrations/0009_chunk_acl.sql).
+[migrations/0009_chunk_acl.sql](../../../migrations/0009_chunk_acl.sql).
 
 ## Restore
 

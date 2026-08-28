@@ -53,7 +53,7 @@ Every org-scoped table carries an `org_id` column. That is the boundary. The
 three layers are three independent ways of making sure it is honoured.
 
 Layer one is a choke point in application code. `TenantScope`, in
-[tenancy.py](../../knowledge_desk/tenancy.py), holds an `AuthContext` with the
+[tenancy.py](../../../knowledge_desk/tenancy.py), holds an `AuthContext` with the
 acting user's id, org, role, and email, and every method stamps `org_id` onto the
 SQL it issues. The module docstring states the rule directly: if a query touches
 org data and is not a method here, that is the bug. This is 561 lines and it is
@@ -64,7 +64,7 @@ Layer two is the ACL predicate inside the retrieval query, covered in the
 previous document.
 
 Layer three is Postgres row-level security, in
-[migrations/0007_rls.sql](../../migrations/0007_rls.sql). This is the one you
+[migrations/0007_rls.sql](../../../migrations/0007_rls.sql). This is the one you
 probably have not used, so here is how it works.
 
 RLS lets you attach a policy to a table which is silently ANDed into every query
@@ -76,7 +76,7 @@ org_id = current_setting('app.current_org', true)::uuid
 
 `current_setting` reads a session variable, which Postgres calls a GUC. The
 application sets it at the start of each transaction, inside
-[`connect(org_id)`](../../knowledge_desk/db.py). If it is unset, the comparison
+[`connect(org_id)`](../../../knowledge_desk/db.py). If it is unset, the comparison
 is null, no rows match, and every query on that table returns empty.
 
 Deny by default, enforced by the database, underneath all your application code.
@@ -128,8 +128,8 @@ conn.execute("select set_config('app.current_org', %s, true)", (org_id,))
 
 A recycled connection always starts with no tenant, and no tenant means deny by
 default. The reasoning is in the module docstring of
-[db.py](../../knowledge_desk/db.py), and the test asserting it is in
-[test_governance.py:166-202](../../tests/test_governance.py#L166-L202), which
+[db.py](../../../knowledge_desk/db.py), and the test asserting it is in
+[test_governance.py:166-202](../../../tests/test_governance.py#L166-L202), which
 checks both that an unscoped query returns zero rows and that pooled reuse does
 not inherit context.
 
@@ -148,7 +148,7 @@ unreadable to the only process that drains it. The isolation happens immediately
 after: the claimed job's `org_id` becomes the tenant context for the work, so
 `process_ingest_document` runs inside the same RLS the API does. A job row holds
 a document id, never document content. That reasoning is written at the top of
-[jobs.py](../../knowledge_desk/jobs.py), and the fact that it is written down is
+[jobs.py](../../../knowledge_desk/jobs.py), and the fact that it is written down is
 the point. An unexplained exception to a security rule is indistinguishable from
 a mistake.
 
@@ -233,7 +233,7 @@ managed-database version of this problem, where the default role you are given
 bypasses RLS and your entire third layer evaporates on deploy while remaining
 present in the source tree.
 
-The GUC scope contrast in [db.py](../../knowledge_desk/db.py) is the detail I
+The GUC scope contrast in [db.py](../../../knowledge_desk/db.py) is the detail I
 would put in front of anyone building multi-tenant Postgres.
 `app.current_org` is transaction-scoped because pooled reuse of it is a leak.
 `hnsw.iterative_scan` is session-scoped on the same connection because it is
@@ -262,7 +262,7 @@ What I would want before calling this production-grade for a real customer base:
 a periodic reconciliation job that samples rows and asserts `org_id` consistency
 across `documents`, `chunks`, and the denormalised `chunks.acl`, because the
 denormalisation from
-[migrations/0009_chunk_acl.sql](../../migrations/0009_chunk_acl.sql) creates a
+[migrations/0009_chunk_acl.sql](../../../migrations/0009_chunk_acl.sql) creates a
 second place for tenancy and permission to disagree. The three layers all protect
 against forgetting a filter. None of them protect against two copies of the truth
 drifting apart.
