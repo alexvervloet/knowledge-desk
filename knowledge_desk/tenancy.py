@@ -98,6 +98,30 @@ class TenantScope:
             raise NotFound(f"group not found: {group_id}")
         return row
 
+    def add_group_member_by_email(self, group_id: str, email: str) -> str:
+        """Add an org member to a group, addressed by email. Returns the user id.
+
+        The resolution happens inside the org, and that is the whole point. The
+        route used to resolve the email globally and then let this class check
+        membership, which produced two tellable-apart 404s: "no user with email"
+        when the address had no account anywhere, "user is not a member of this
+        org" when it had one in someone else's tenant. An org admin could walk a
+        list of addresses and learn which of them have accounts on the platform.
+        Scoping the lookup means both cases give the same answer.
+        """
+        self.require_role("admin")
+        with connect(self.org_id) as conn:
+            row = conn.execute(
+                "select u.id from users u join memberships m on m.user_id = u.id"
+                " where u.email = %s and m.org_id = %s",
+                (email.strip().lower(), self.org_id),
+            ).fetchone()
+        if row is None:
+            raise NotFound(f"no member of this org with email: {email}")
+        user_id = str(row["id"])
+        self.add_group_member(group_id, user_id)
+        return user_id
+
     def add_group_member(self, group_id: str, user_id: str) -> None:
         self.require_role("admin")
         self.get_group(group_id)  # 404s if the group is not in this org

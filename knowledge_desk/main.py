@@ -234,8 +234,7 @@ def add_group_member(
     req: AddGroupMemberRequest,
     scope: Annotated[TenantScope, Depends(current_scope)],
 ) -> dict:
-    user_id = accounts.find_user_id(req.email)
-    scope.add_group_member(group_id, user_id)
+    user_id = scope.add_group_member_by_email(group_id, req.email)
     return {"group_id": group_id, "user_id": user_id}
 
 

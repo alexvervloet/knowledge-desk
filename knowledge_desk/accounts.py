@@ -21,7 +21,7 @@ from knowledge_desk.auth import (
 )
 from knowledge_desk.config import settings
 from knowledge_desk.db import connect, require_row
-from knowledge_desk.errors import AuthError, Conflict, NotFound
+from knowledge_desk.errors import AuthError, Conflict
 from knowledge_desk.tenancy import AuthContext
 
 
@@ -225,13 +225,3 @@ def delete_org(org_id: str) -> None:
     with connect() as conn:
         conn.execute("delete from orgs where id = %s", (org_id,))
 
-
-def find_user_id(email: str) -> str:
-    email = email.strip().lower()
-    with connect() as conn:
-        row = conn.execute(
-            "select id from users where email = %s", (email,)
-        ).fetchone()
-    if row is None:
-        raise NotFound(f"no user with email: {email}")
-    return str(row["id"])

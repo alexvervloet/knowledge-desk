@@ -193,6 +193,27 @@ def test_cannot_add_foreign_user_to_group():
     assert resp.status_code == 404
 
 
+def test_group_add_does_not_reveal_whether_an_email_exists_elsewhere():
+    """Resolving the email globally and checking membership second gave two
+    tellable-apart 404s, which let an org admin probe for accounts on the whole
+    platform. Both cases have to read the same."""
+    a = signup("acme", "owner@acme.test")
+    signup("globex", "outsider@globex.test")
+    group_id = client.post("/groups", headers=auth(a), json={"name": "eng"}).json()["id"]
+
+    def add(email: str):
+        return client.post(
+            f"/groups/{group_id}/members", headers=auth(a), json={"email": email}
+        )
+
+    has_account_elsewhere = add("outsider@globex.test")
+    has_no_account = add("nobody@nowhere.test")
+
+    assert has_account_elsewhere.status_code == has_no_account.status_code == 404
+    assert (has_account_elsewhere.json()["detail"].replace("outsider@globex.test", "")
+            == has_no_account.json()["detail"].replace("nobody@nowhere.test", ""))
+
+
 # --- session lifecycle ----------------------------------------------------
 
 
