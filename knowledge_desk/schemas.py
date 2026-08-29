@@ -14,7 +14,9 @@ of these.
 
 from __future__ import annotations
 
-from pydantic import BaseModel, Field
+from typing import Annotated
+
+from pydantic import AfterValidator, BaseModel, Field
 
 # Shared constraints, named once so the same rule cannot drift between two
 # endpoints that mean the same thing by it.
@@ -22,6 +24,26 @@ Slug = Field(pattern=r"^[a-z0-9][a-z0-9-]{1,38}[a-z0-9]$")
 Password = Field(min_length=8, max_length=200)
 Role = Field(pattern=r"^(owner|admin|member)$")
 Email = Field(min_length=3, max_length=200)
+
+
+def _no_control_characters(value: str) -> str:
+    """Reject control characters in a document path.
+
+    A path is uploaded text, and it is rendered into the answer prompt on the
+    citation line above the passage. The renderer neutralizes our delimiters
+    wherever they appear, but a newline needs no delimiter to do damage: it ends
+    the citation line and opens a fresh one, which is most of what an injection
+    is after. A real file path has no use for a control character, so the
+    cheapest place to settle it is here, before the text is ever stored.
+    """
+    if any(ch < " " or ch == "\x7f" for ch in value):
+        raise ValueError("must not contain control characters")
+    return value
+
+
+DocumentPath = Annotated[
+    str, Field(min_length=1, max_length=1024), AfterValidator(_no_control_characters)
+]
 
 
 # --- auth -----------------------------------------------------------------
@@ -76,7 +98,7 @@ class AddGroupMemberRequest(BaseModel):
 
 
 class UploadedDocument(BaseModel):
-    path: str = Field(min_length=1, max_length=1024)
+    path: DocumentPath
     content: str = Field(max_length=1_000_000)
     acl: list[str] | None = None
 
