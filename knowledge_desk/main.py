@@ -53,6 +53,7 @@ from knowledge_desk.schemas import (
     TokenResponse,
     UpdateAclRequest,
 )
+from knowledge_desk.securityheaders import SecurityHeadersMiddleware
 from knowledge_desk.tenancy import AuthContext, TenantScope
 
 app = FastAPI(title="Knowledge Desk", version=__version__)
@@ -62,6 +63,10 @@ tracing.init()  # enables Langfuse only if LANGFUSE_* keys are set; no-op otherw
 # per-org caps in the upload route are the policy; this only keeps enforcing
 # them from costing what it would cost to parse the request first.
 app.add_middleware(BodySizeLimitMiddleware, max_bytes=settings.max_request_bytes)
+# Applies to the SPA as well as the API: in production the built UI is served
+# same-origin from here, so this is what constrains the page holding the session
+# token. Added before CORS so it also covers a preflight reply.
+app.add_middleware(SecurityHeadersMiddleware)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origins,
