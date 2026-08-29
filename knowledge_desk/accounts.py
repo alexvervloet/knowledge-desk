@@ -54,27 +54,40 @@ def create_org_with_owner(
 
 
 def add_member(org_id: str, email: str, password: str, role: str) -> str:
-    """Grant a user access to an org, creating the global user if needed.
-    Returns the user id. The caller must already be authorized (admin+).
+    """Create a user and grant them access to an org. Returns the user id. The
+    caller must already be authorized (admin+).
+
+    Only ever creates. An email that already has an account is refused, and that
+    refusal is the point: this used to reuse the existing user and just insert a
+    membership, which let any org admin attach a stranger's account to their own
+    tenant. Nothing in the request is evidence the account holder agreed — the
+    password argument is one the admin chose, and it was silently discarded on
+    that path, so the admin did not even need to know the real one.
+
+    Joining an existing account to a second org is a real need, and it needs an
+    invitation the invitee accepts. That is not built. Until it is, a 409 is the
+    honest answer, and a silent graft is not.
     """
     email = email.strip().lower()
     with connect() as conn:
-        user = conn.execute(
-            "select id from users where email = %s", (email,)
-        ).fetchone()
-        if user is None:
+        try:
             user = require_row(conn.execute(
                 "insert into users(email, password_hash) values (%s, %s)"
                 " returning id",
                 (email, hash_password(password)),
             ).fetchone())
-        try:
+            # Unreachable by unique violation: the user was created a statement
+            # ago, so no membership for them can exist yet. Same transaction, so
+            # a failure here leaves no orphan user behind.
             conn.execute(
                 "insert into memberships(user_id, org_id, role) values (%s, %s, %s)",
                 (user["id"], org_id, role),
             )
         except psycopg.errors.UniqueViolation as exc:
-            raise Conflict("user is already a member of this org") from exc
+            raise Conflict(
+                "that email already has an account; an existing account can only"
+                " join another org by invitation"
+            ) from exc
     return str(user["id"])
 
 

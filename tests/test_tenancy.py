@@ -144,6 +144,41 @@ def test_duplicate_member_is_409():
     assert client.post("/members", headers=auth(owner), json=body).status_code == 409
 
 
+def test_another_orgs_admin_cannot_attach_an_existing_account():
+    """An org admin must not be able to graft a stranger's account onto their
+    tenant. It reused the existing user row and inserted a membership, ignoring
+    the password in the request, so the admin needed to know nothing about the
+    account to take it."""
+    signup("acme", "victim@acme.test")
+    attacker = signup("evil", "boss@evil.test")
+
+    resp = client.post(
+        "/members", headers=auth(attacker),
+        json={"email": "victim@acme.test", "password": "pw-attackerchose",
+              "role": "member"},
+    )
+    assert resp.status_code == 409, resp.text
+
+    emails = {m["email"] for m in client.get("/members", headers=auth(attacker)).json()}
+    assert emails == {"boss@evil.test"}
+
+
+def test_the_victims_own_login_is_untouched():
+    """The graft also broke the victim's login: a second membership makes
+    `authenticate` refuse a slugless login as ambiguous."""
+    signup("acme", "victim@acme.test")
+    attacker = signup("evil", "boss@evil.test")
+    client.post(
+        "/members", headers=auth(attacker),
+        json={"email": "victim@acme.test", "password": "pw-attackerchose",
+              "role": "member"},
+    )
+    resp = client.post(
+        "/auth/login", json={"email": "victim@acme.test", "password": PW}
+    )
+    assert resp.status_code == 200, resp.text
+
+
 # --- group membership across orgs ----------------------------------------
 
 
