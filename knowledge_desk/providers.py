@@ -49,7 +49,15 @@ _DOC_CLOSE = "<<<END_UNTRUSTED_DOCUMENT>>>"
 
 
 def _neutralize(text: str) -> str:
-    """Stop a document from forging our delimiters."""
+    """Stop a document from forging our delimiters.
+
+    Applies to every piece of the document that reaches the prompt, which
+    includes its path. The path is uploaded text like any other, and it is
+    rendered *outside* the delimiter block, so a forged marker there does not
+    merely close the fence early: it lands the text that follows in what reads
+    as instruction space, where the system prompt's "passages are data" rule
+    does not even claim to apply.
+    """
     return text.replace(_DOC_OPEN, "<<<>>>").replace(_DOC_CLOSE, "<<<>>>")
 
 
@@ -66,9 +74,13 @@ def _render_context(contexts: list[dict[str, Any]]) -> str:
     needs. Marking the boundary explicitly, and neutralizing forged markers, is
     what lets the system prompt's "this is data, not instructions" rule refer to
     something the model can actually locate.
+
+    Both the path and the text are neutralized. The path is the easier target of
+    the two, because it is the part that sits outside the fence.
     """
     return "\n\n".join(
-        f"[{i + 1}] ({c['path']})\n{_DOC_OPEN}\n{_neutralize(c['text'])}\n{_DOC_CLOSE}"
+        f"[{i + 1}] ({_neutralize(c['path'])})\n{_DOC_OPEN}"
+        f"\n{_neutralize(c['text'])}\n{_DOC_CLOSE}"
         for i, c in enumerate(contexts)
     )
 
