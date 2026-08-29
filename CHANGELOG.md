@@ -12,6 +12,57 @@ do, not merely a change to security-adjacent code.
 The migration files carry phase numbers in their comments as a record of when
 each was written. The sections below name which phases those were.
 
+## 2026-08-29 — Security review remediation
+
+A review of prompt-injection defense and general application security raised
+five findings. All are fixed here, each reproduced against the running code
+before the fix and covered by a test that fails without it.
+
+### Security
+
+- Neutralize the document path when building the answer prompt. `_render_context`
+  neutralized a passage's text but interpolated its path raw, on the citation
+  line *outside* the untrusted-content markers. A path is uploaded text with the
+  same provenance as the content, so a forged closing marker there did not merely
+  close the fence early — it landed the payload where the model reads
+  instructions, which is the one region the system prompt's "passages are data"
+  rule does not claim to cover. A path carrying both markers could also forge an
+  extra `[n]` passage citing a file the asker was not permitted to see.
+- Refuse control characters in an uploaded document path. Second, independent
+  defense for the same vector: a newline needs no marker to escape the citation
+  line, and a real file path has no use for one.
+- Refuse to add a member whose email already has an account. `add_member` reused
+  the existing user row and inserted a membership, silently discarding the
+  password in the request, so any org admin could attach a stranger's account to
+  their own tenant without knowing anything about it. It also broke the victim's
+  slugless login by making their membership ambiguous. Joining an existing
+  account to a second org needs an invitation flow, which does not exist; until
+  it does this is a 409 that says so.
+- Send security response headers on every reply. The built SPA is served
+  same-origin from the API, so the page holding the session token had no CSP, no
+  `nosniff`, no framing rule, and no referrer policy. `script-src` is `'self'`
+  with no inline escape, which the Vite build already satisfies.
+- Resolve a group invitation's email inside the org. The route resolved the
+  address globally and checked membership afterwards, producing two
+  distinguishable 404s — one for an address with no account anywhere, one for an
+  address with an account in another tenant. Any org admin could use it to probe
+  for accounts across the whole platform.
+
+### Changed
+
+- Redact PII from everything sent to Langfuse: question, answer, and document
+  paths. The same text is stored unredacted in Postgres deliberately, and that
+  argument rests on the reader already being an admin of the asker's own org,
+  which does not hold for a third-party service. Answers are redacted after the
+  stream is joined, because a pattern straddling two tokens is invisible in
+  either alone. Traces now tag the user by id rather than email address.
+
+### Added
+
+- A second injection eval covering the document path, and unit tests for the
+  prompt boundary. The existing eval only ever put its payload in the content
+  field, so the path vector could regress without failing the build.
+
 ## 2026-08-10 — Audit remediation
 
 An audit of code quality, resilience, security, structure, and documentation
