@@ -40,7 +40,7 @@ convention the model chooses to honour, not a parser rule. A document that says
 `SYSTEM: ignore all previous instructions` is a SQL injection whose interpreter
 is a neural network and whose escaping rules are probabilistic.
 
-The defense is in [providers.py:47-77](../../knowledge_desk/providers.py#L47-L77):
+The defense is in [providers.py:47-77](../../knowledge_desk/providers.py#L47-L85):
 explicit delimiters around retrieved text, forged delimiters neutralised before
 the prompt is assembled, and a system prompt that names the boundary so the model
 can locate it. You will break this yourself in
@@ -69,7 +69,7 @@ That last one is a genuine trap, and this repo walked into it: a stream the user
 abandons still consumed tokens, because the model generated them before anyone
 stopped reading. Left unbilled, aborting every request just before the end is
 free inference. The fix is in
-[assistant.py:139-153](../../knowledge_desk/assistant.py#L139-L153) — book an
+[assistant.py:139-153](../../knowledge_desk/assistant.py#L138-L152) — book an
 estimate, flagged as estimated. Spend is capped *before* the model runs
 ([assistant.py:35-47](../../knowledge_desk/assistant.py#L35-L47)), because a cap you
 check afterwards is an invoice.
@@ -84,7 +84,7 @@ cheerfully summarises a document the asker cannot open.
 
 The rule this project follows: **filter inside the candidate fetch, never
 after.** The ACL predicate sits in the same SQL that ranks
-([tenancy.py:359-380](../../knowledge_desk/tenancy.py#L359-L380)), so a forbidden
+([tenancy.py:359-380](../../knowledge_desk/tenancy.py#L383-L404)), so a forbidden
 chunk is never scored, never ranked, and cannot survive a forgotten post-filter.
 A post-filter also silently returns fewer than `k` results, which looks like bad
 retrieval rather than a security design.
@@ -98,7 +98,7 @@ Everything in the 96% exists to hold one of these:
    security), so no single bug is a breach.
 2. **Groundedness** — if retrieval returns nothing permitted, the assistant
    refuses instead of answering from the model's own knowledge
-   ([assistant.py:90-96](../../knowledge_desk/assistant.py#L90-L96)). The refusal is
+   ([assistant.py:90-96](../../knowledge_desk/assistant.py#L89-L95)). The refusal is
    the feature.
 3. **Bounded cost** — per-org budget, per-org monthly cap, and a
    deployment-wide daily ceiling, all checked before generation.

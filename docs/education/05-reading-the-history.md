@@ -165,7 +165,7 @@ learn:
 
 1. **Add the distance threshold** — write the eval first
    ([03-evals.md](03-evals.md)), watch it fail, then fix
-   [`TenantScope.search`](../../knowledge_desk/tenancy.py#L359-L380).
+   [`TenantScope.search`](../../knowledge_desk/tenancy.py#L383-L404).
 2. **Add an eval for a property you think is under-defended**, and find out
    whether it holds.
 3. **Read [WALKTHROUGH.md](../WALKTHROUGH.md)'s "Where it will disappoint you"**

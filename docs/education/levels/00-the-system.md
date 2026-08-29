@@ -57,7 +57,7 @@ each with a `text` column and an `embedding` column, where the embedding is a
 1,024-dimensional float vector stored in Postgres by the pgvector extension.
 Retrieval is a nearest-neighbour query under cosine distance, written in SQL with
 the `<=>` operator, in
-[tenancy.py:359-380](../../../knowledge_desk/tenancy.py#L359-L380).
+[tenancy.py:359-380](../../../knowledge_desk/tenancy.py#L383-L404).
 
 You already know what makes that expensive. Exact nearest neighbour over N rows
 is O(N) distance computations per query, and each one touches 1,024 floats. So
@@ -125,7 +125,7 @@ convention the model chooses to honour rather than a rule a parser enforces. A
 document containing `SYSTEM: ignore all previous instructions` is an injection
 attack whose interpreter is a neural network and whose escaping rules are
 probabilistic. The defense is in
-[providers.py:47-77](../../../knowledge_desk/providers.py#L47-L77) and it is worth
+[providers.py:47-77](../../../knowledge_desk/providers.py#L47-L85) and it is worth
 reading because it is so unsatisfying compared to parameterised SQL.
 
 Wrong output is not an error. Your training says a bug throws, or returns a
@@ -202,7 +202,7 @@ silently returns short result sets rather than failing.
 per-customer cap. A strong answer notices that per-customer caps bound one
 customer, and that with open signup they do not bound the bill at all, so there
 has to be a deployment-wide ceiling underneath. That is
-[tenancy.py:444](../../../knowledge_desk/tenancy.py#L444) here, and it was added
+[tenancy.py:444](../../../knowledge_desk/tenancy.py#L468) here, and it was added
 late, which is normal.
 
 "How do you know your last deploy did not reintroduce a data leak?" If the answer
@@ -267,7 +267,7 @@ client that walks away mid-answer raises `GeneratorExit` inside it, and the
 unbilled, aborting each request just before the usage frame is a free-tokens
 exploit. It only books when something was actually streamed, so a pre-first-token
 failure does not invent a charge. See
-[assistant.py:139-153](../../../knowledge_desk/assistant.py#L139-L153).
+[assistant.py:139-153](../../../knowledge_desk/assistant.py#L138-L152).
 
 Where I think it is still weak: the rate limiter is in-process, so it is per
 worker rather than per deployment, and the platform spend ceiling is a read of

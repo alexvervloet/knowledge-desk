@@ -36,7 +36,7 @@ safe. But anyone can sign up, and each new signup is a new company with a fresh
 ten dollars. A person who wants to run up your bill just makes a hundred
 accounts. Per-company limits only limit companies. They do not limit the total,
 unless you also put a limit on the total. The code for that is one function,
-[tenancy.py:444](../../../knowledge_desk/tenancy.py#L444), and it was added late,
+[tenancy.py:444](../../../knowledge_desk/tenancy.py#L468), and it was added late,
 which is normal, because you only see the hole once you think like an attacker
 instead of like a customer.
 
@@ -71,7 +71,7 @@ def _limit_block(scope):
 
 Called first in `answer_stream`, before retrieval and before any model call. A
 blocked question is still recorded and marked blocked, at
-[tenancy.py:428](../../../knowledge_desk/tenancy.py#L428), which sounds like
+[tenancy.py:428](../../../knowledge_desk/tenancy.py#L452), which sounds like
 bookkeeping and is actually operational: a refusal you cannot count is a refusal
 you cannot debug, and the first support ticket will be "it says I hit my limit
 and I do not believe you".
@@ -82,7 +82,7 @@ buffered 400MB is not protecting the thing you thought it was.
 
 There is a fourth one worth studying for the concurrency lesson. The storage
 quota is checked inside the same transaction that does the write, at
-[tenancy.py:199-227](../../../knowledge_desk/tenancy.py#L199-L227), passed in as a
+[tenancy.py:199-227](../../../knowledge_desk/tenancy.py#L223-L251), passed in as a
 `precheck` callback that `sync_documents` runs before writing anything. If you
 checked the quota in one transaction and wrote in another, two concurrent uploads
 both measure "we are under quota", and both write. Classic time-of-check to
@@ -112,7 +112,7 @@ never arrived.
 Left unbilled, that is an exploit with no cleverness required: abort every request
 just before the end and consume unlimited model output while your recorded spend
 stays at zero. The handling is at
-[assistant.py:139-153](../../../knowledge_desk/assistant.py#L139-L153): estimate the
+[assistant.py:139-153](../../../knowledge_desk/assistant.py#L138-L152): estimate the
 usage from what was actually streamed, book it, and flag it as estimated so
 nobody mistakes it for a measured number. It only books when something was
 streamed, so a failure before the first token does not invent a charge.

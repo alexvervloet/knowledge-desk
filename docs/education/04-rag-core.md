@@ -12,7 +12,7 @@ codebase, and only one of them is engineering.
 | Chunking | fixed character windows with overlap ([chunking.py](../../knowledge_desk/chunking.py)) | `chunk_size: 1000`, `chunk_overlap: 150` |
 | Embedding | Voyage `voyage-3`, 1024 dims, or a deterministic mock ([embeddings.py](../../knowledge_desk/embeddings.py)) | `embed_model` |
 | Index | none — exact scan with cosine distance | see below |
-| Query | embed, ACL-filtered nearest neighbours ([tenancy.py:359-380](../../knowledge_desk/tenancy.py#L359-L380)) | `retrieval_k: 6` |
+| Query | embed, ACL-filtered nearest neighbours ([tenancy.py:359-380](../../knowledge_desk/tenancy.py#L383-L404)) | `retrieval_k: 6` |
 | Rerank | none | |
 | Threshold | none | |
 
@@ -72,7 +72,7 @@ authoritative.
 
 It is a strange gap given the rest of the system's posture: enormous effort went
 into making the assistant refuse when it retrieves *nothing permitted*
-([assistant.py:90-96](../../knowledge_desk/assistant.py#L90-L96)), and no effort
+([assistant.py:90-96](../../knowledge_desk/assistant.py#L89-L95)), and no effort
 into refusing when it retrieves *nothing relevant*. Both should end in the same
 honest empty answer.
 

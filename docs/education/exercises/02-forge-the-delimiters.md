@@ -21,7 +21,7 @@ that looks least important.
 
 ## The three parts
 
-Read [providers.py:27-77](../../../knowledge_desk/providers.py#L27-L77) first:
+Read [providers.py:27-77](../../../knowledge_desk/providers.py#L27-L85) first:
 
 1. **A system prompt that names the boundary.** It tells the model the passages
    are untrusted data, may imitate system prompts, and that instructions inside
@@ -31,14 +31,14 @@ Read [providers.py:27-77](../../../knowledge_desk/providers.py#L27-L77) first:
    than a vague reference ([providers.py:47-48](../../../knowledge_desk/providers.py#L47-L48)).
 3. **Neutralisation of forged markers**, so a document cannot contain the closing
    marker and thereby appear to end early
-   ([providers.py:51-52](../../../knowledge_desk/providers.py#L51-L52)).
+   ([providers.py:51-52](../../../knowledge_desk/providers.py#L51-L61)).
 
 Part 3 is four lines and looks like paranoia. It is the part that makes parts 1
 and 2 mean anything.
 
 ## The edit
 
-Open [providers.py:51-52](../../../knowledge_desk/providers.py#L51-L52) and make
+Open [providers.py:51-52](../../../knowledge_desk/providers.py#L51-L61) and make
 `_neutralize` a passthrough:
 
 ```python

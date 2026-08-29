@@ -30,7 +30,7 @@ Knowledge Desk does it the good way, and the whole trick is that the permission
 check and the "find the closest matches" step happen in the same operation
 instead of one after the other. In code that means one database query does both
 things at once. You can read it at
-[tenancy.py:359-380](../../../knowledge_desk/tenancy.py#L359-L380). It is about
+[tenancy.py:359-380](../../../knowledge_desk/tenancy.py#L383-L404). It is about
 eight lines.
 
 There is a second reason the good way is better, and it is the serious one. In
@@ -60,7 +60,7 @@ HNSW index over that column to make it approximate and fast.
 
 The permission filter. Chunks carry an `acl` column, a JSONB array of strings.
 The caller's access set is computed by
-[`principals()`](../../../knowledge_desk/tenancy.py#L325-L340) and is exactly:
+[`principals()`](../../../knowledge_desk/tenancy.py#L349-L364) and is exactly:
 
 ```
 ["public-to-org", "user:<their id>", "group:<g1>", "group:<g2>", ...]
@@ -168,7 +168,7 @@ whole time.
 
 One more thing you will not have thought about: the gap between "chunks this org
 has" and "chunks this caller may see" is itself a number worth recording.
-[`retrieval_stats()`](../../../knowledge_desk/tenancy.py#L341) computes both counts
+[`retrieval_stats()`](../../../knowledge_desk/tenancy.py#L365) computes both counts
 and they land on the trace's retriever span. When someone reports that the
 assistant is useless, the first question is whether retrieval failed or whether
 that person is allowed to see eleven chunks out of nine thousand. Those look
@@ -232,7 +232,7 @@ described above.
 
 ## Level 5: senior AI engineer
 
-The query is [tenancy.py:359-380](../../../knowledge_desk/tenancy.py#L359-L380).
+The query is [tenancy.py:359-380](../../../knowledge_desk/tenancy.py#L383-L404).
 Filter and ranking in one statement, `c.acl ?| principals` alongside
 `order by c.embedding <=> vec limit k`, org id on top as the tenant boundary.
 Nothing surprising in the shape. The interesting content is in the three

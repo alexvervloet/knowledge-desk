@@ -164,7 +164,7 @@ disappoint you"). Write the eval first: upload a document about refunds, ask abo
 something entirely unrelated, and assert the answer refuses rather than cites.
 
 Watch it fail. Then add a distance cutoff to
-[`TenantScope.search`](../../knowledge_desk/tenancy.py#L359-L380) and watch it pass.
+[`TenantScope.search`](../../knowledge_desk/tenancy.py#L383-L404) and watch it pass.
 That is the whole loop — property, gate, fix — on a real gap in a real system.
 
 Next: [04-rag-core.md](04-rag-core.md).
