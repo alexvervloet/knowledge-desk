@@ -4,14 +4,14 @@ Read this before the code, or the code will look over-engineered.
 
 ## The number that makes the argument
 
-Knowledge Desk is 3,169 lines of application Python. The part that a tutorial
+Knowledge Desk is 3,365 lines of application Python. The part that a tutorial
 would call "the RAG" — turning text into chunks, chunks into vectors, and a
-question into a nearest-neighbour lookup — is 126 lines across three files:
+question into a nearest-neighbour lookup — is 129 lines across three files:
 
 | File | Lines | Job |
 |---|---|---|
-| [chunking.py](../../knowledge_desk/chunking.py) | 35 | split text into overlapping windows |
-| [embeddings.py](../../knowledge_desk/embeddings.py) | 76 | text → vector, with a mock fallback |
+| [chunking.py](../../knowledge_desk/chunking.py) | 33 | split text into overlapping windows |
+| [embeddings.py](../../knowledge_desk/embeddings.py) | 79 | text → vector, with a mock fallback |
 | [retrieval.py](../../knowledge_desk/retrieval.py) | 17 | embed the query, hand it to the data layer |
 
 Four percent of the code. And it is the *easy* four percent: it has no failure

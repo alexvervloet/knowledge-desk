@@ -144,7 +144,7 @@ control, cost, and evals, and left retrieval simple. Three reasons that are wort
 weighing for your own work:
 
 **The retrieval stack is the replaceable part.** Chunking, embedding, and ranking
-are 126 lines behind a narrow interface. Swapping in token-aware chunking, a
+are 129 lines behind a narrow interface. Swapping in token-aware chunking, a
 reranker, and hybrid search is a contained afternoon's work that touches almost
 nothing else. The tenancy model is not like that — get the isolation boundary
 wrong and it is a rewrite, because every query, every index, and every migration

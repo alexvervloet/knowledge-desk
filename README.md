@@ -44,7 +44,7 @@ code but have not shipped an LLM application. It runs keyless, so you need no AP
 keys to work through it.
 
 It starts from an uncomfortable ratio: the part a tutorial would call "the RAG"
-is 126 lines of the 3,169 here. The other 96% is what the
+is 129 lines of the 3,365 here. The other 96% is what the
 [thesis](docs/education/01-thesis.md) argues is the actual job — access-controlled
 retrieval, tenant isolation, injection defense, cost ceilings, and evals that
 block a merge.
