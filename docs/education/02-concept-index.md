@@ -9,7 +9,7 @@ drifted, the symbol name next to it will still find the code.
 | Concept | Where | What to notice |
 |---|---|---|
 | System prompt | [providers.py:27-45](../../knowledge_desk/providers.py#L27-L45) `_SYSTEM` | Two jobs in one prompt: answer only from context, and treat context as data. Both are load-bearing. |
-| Untrusted-content boundary | [providers.py:47-59](../../knowledge_desk/providers.py#L47-L61) `_DOC_OPEN`, `_neutralize` | Delimiters the system prompt can refer to, plus the code that stops a document forging them. |
+| Untrusted-content boundary | [providers.py:47-59](../../knowledge_desk/providers.py#L47-L61) `_DOC_OPEN`, `_neutralize` | Delimiters the system prompt can refer to, plus the code that stops a document forging them — in its path as well as its text. |
 | Rendering retrieved passages | [providers.py:61-77](../../knowledge_desk/providers.py#L69-L85) `_render_context` | Where untrusted text is wrapped before it ever reaches the model. |
 | Streaming interface | [providers.py:95](../../knowledge_desk/providers.py#L107), [providers.py:135](../../knowledge_desk/providers.py#L147) `stream` | Mock and Claude implement the same event contract: zero or more `token`, exactly one `usage`, last. |
 | Keyless mock fallback | [providers.py:83-113](../../knowledge_desk/providers.py#L95-L124) `MockAnswerProvider` | Loud on purpose — a banner in every reply, so a mock answer can never be mistaken for a real one. |
@@ -100,6 +100,8 @@ Explained in full in [03-evals.md](03-evals.md).
 | Role ranking | [auth.py:21](../../knowledge_desk/auth.py#L21) `ROLE_RANK` | |
 | Role gates live in the data layer | [tenancy.py:46-62](../../knowledge_desk/tenancy.py#L46-L62) | Not in routes — a new route cannot forget a check that lives under it. |
 | No granting above yourself | [tenancy.py:50-62](../../knowledge_desk/tenancy.py#L50-L62) `require_can_grant` | Handing out a role you do not hold is privilege escalation with an extra step. |
+| No unconsented membership | [accounts.py](../../knowledge_desk/accounts.py) `add_member` | An email that already has an account is refused. Nothing in the request is evidence the holder agreed to join. |
+| Security response headers | [securityheaders.py](../../knowledge_desk/securityheaders.py) | The SPA is served same-origin, so the CSP lands on the page holding the session token. No inline-script escape. |
 | Domain errors → HTTP | [errors.py](../../knowledge_desk/errors.py) | One mapping, so handlers do not invent status codes. |
 
 ## Where to go next
