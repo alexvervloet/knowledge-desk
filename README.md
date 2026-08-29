@@ -174,6 +174,12 @@ was allowed to see (the ACL filter, made visible), and the answer as a generatio
 with token usage and cost. Without keys it is a no-op, and every tracer call is
 exception-proof, so observability can never take the product down.
 
+Questions, answers, and document paths are PII-redacted on the way out, and the
+user is tagged by id rather than email address. The same text is stored
+unredacted in Postgres, which is deliberate: a question is content, and reading
+that table already means being an admin of the asker's own org. Langfuse is a
+third party, so neither half of that argument travels with it.
+
 ## License
 
 MIT. See [LICENSE](LICENSE).

@@ -11,6 +11,13 @@ degrades to a log line, never an error in the request. Uses the explicit
 start_observation object API rather than the context-manager one, because the
 answer is streamed and context-var "current spans" can leak between interleaved
 requests.
+
+Everything that leaves for Langfuse is redacted first. The question and answer
+are stored unredacted in Postgres on purpose (see TenantScope.record_answer),
+and that argument rests on two things: a question is content rather than
+metadata, and anyone who can read it is already an admin of the asker's own org.
+Neither survives the trip to a third-party service, so the redaction happens
+here, at the edge that crosses it.
 """
 
 from __future__ import annotations
@@ -18,6 +25,8 @@ from __future__ import annotations
 import logging
 import os
 from typing import Any
+
+from knowledge_desk import pii
 
 log = logging.getLogger("knowledge_desk")
 
@@ -42,17 +51,36 @@ def init() -> None:
         log.exception("langfuse: init failed, tracing disabled")
 
 
+def _scrub(text: str) -> str:
+    """Redact PII from a string on its way out to the tracer.
+
+    Fails closed: if redaction itself raises, the text is dropped rather than
+    sent. That is the one place this module does not simply degrade to a log
+    line, because the failure mode it is guarding is disclosure.
+    """
+    try:
+        return pii.redact(text)
+    except Exception:
+        log.exception("langfuse: redaction failed")
+        return "[REDACTION FAILED]"
+
+
+def _scrub_sources(sources: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Document paths are uploaded text and routinely name people."""
+    return [{**s, "path": _scrub(str(s.get("path", "")))} for s in sources]
+
+
 class AskTracer:
     """Collects one question's trace. Every method is exception-proof, and all
     are no-ops when Langfuse is not configured."""
 
-    def __init__(self, question: str, org_id: str, user_id: str, email: str,
+    def __init__(self, question: str, org_id: str, user_id: str,
                  provider_name: str, model: str) -> None:
         self._root: Any = None
         self._retrieval: Any = None
         self._gen: Any = None
         self._answer: list[str] = []
-        self._question = question
+        self._question = _scrub(question)
         self._model = model
         if _client is None:
             return
@@ -63,12 +91,15 @@ class AskTracer:
             # creation below is synchronous, so the context manager cannot leak
             # across interleaved requests.
             with propagate_attributes(trace_name="ask", user_id=user_id):
+                # The user is tagged by id, not by address: user_id is what
+                # ties a trace back to a person here, and an email is the one
+                # field in this payload that identifies one on its own.
                 self._root = _client.start_observation(
-                    name="ask", as_type="span", input=question,
-                    metadata={"org_id": org_id, "email": email, "provider": provider_name},
+                    name="ask", as_type="span", input=self._question,
+                    metadata={"org_id": org_id, "provider": provider_name},
                 )
                 self._retrieval = self._root.start_observation(
-                    name="retrieval", as_type="retriever", input=question
+                    name="retrieval", as_type="retriever", input=self._question
                 )
         except Exception:
             log.exception("langfuse: trace start failed")
@@ -85,7 +116,9 @@ class AskTracer:
             return
         try:
             if self._retrieval is not None:
-                self._retrieval.update(output={"sources": sources, "acl": stats or {}})
+                self._retrieval.update(
+                    output={"sources": _scrub_sources(sources), "acl": stats or {}}
+                )
                 self._retrieval.end()
                 self._retrieval = None
             self._gen = self._root.start_observation(
@@ -102,8 +135,10 @@ class AskTracer:
         if self._root is None or self._gen is None:
             return
         try:
+            # Redacted at the join, not per token: a pattern that straddles two
+            # streamed tokens is invisible to either one on its own.
             self._gen.update(
-                output="".join(self._answer),
+                output=_scrub("".join(self._answer)),
                 usage_details={"input": input_tokens, "output": output_tokens},
                 cost_details={"total": cost_usd},
             )
@@ -118,7 +153,7 @@ class AskTracer:
                 self._retrieval.end()
             if self._gen is not None:
                 self._gen.end()
-            output = error if error is not None else "".join(self._answer)
+            output = error if error is not None else _scrub("".join(self._answer))
             self._root.set_trace_io(input=self._question, output=output)
             if error is not None:
                 self._root.update(level="ERROR", status_message=error, output=error)

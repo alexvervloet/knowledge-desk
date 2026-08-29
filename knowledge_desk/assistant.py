@@ -55,8 +55,7 @@ def answer_stream(
     # that raises inside here is what books the tokens already spent.
     provider = get_answer_provider()
     model = settings.answer_model if provider.name == "claude" else provider.name
-    tracer = AskTracer(question, scope.org_id, scope.ctx.user_id, scope.ctx.email,
-                       provider.name, model)
+    tracer = AskTracer(question, scope.org_id, scope.ctx.user_id, provider.name, model)
     # The full failure detail, for the trace and the log. Not what the caller
     # sees: an unexpected exception carries whatever the failing layer put in it,
     # which for a database error is host names and role names.

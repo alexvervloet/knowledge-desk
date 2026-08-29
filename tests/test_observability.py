@@ -24,7 +24,7 @@ PW = "pw-supersecret"
 
 def test_tracer_is_inert_without_keys():
     # Every method must be a safe no-op when Langfuse is not configured.
-    t = AskTracer("q", "org", "user", "e@x.test", "mock", "mock")
+    t = AskTracer("q", "org", "user", "mock", "mock")
     assert t.active is False
     t.sources([{"path": "a"}], {"org_chunks": 3, "allowed_chunks": 1})
     t.token("hello ")
@@ -76,7 +76,7 @@ def test_tracer_records_spans_when_enabled(monkeypatch):
     fake = _FakeClient()
     monkeypatch.setattr(tracing, "_client", fake)
 
-    t = AskTracer("what is x?", "org-1", "user-1", "e@x.test", "claude", "claude-opus-5")
+    t = AskTracer("what is x?", "org-1", "user-1", "claude", "claude-opus-5")
     assert t.active is True
     t.sources([{"path": "a.txt"}], {"org_chunks": 5, "allowed_chunks": 2})
     t.token("the answer ")
@@ -94,6 +94,68 @@ def test_tracer_records_spans_when_enabled(monkeypatch):
     assert generation.updates[0]["cost_details"] == {"total": 0.0012}
     assert root.trace_io["output"] == "the answer "
     assert root.ended
+
+
+def test_tracer_redacts_pii_before_it_leaves_for_langfuse(monkeypatch):
+    """The question and answer are stored unredacted in Postgres deliberately.
+    Langfuse is a third party, so the same text is redacted on the way there."""
+    @contextlib.contextmanager
+    def _noop_attrs(**_kw):
+        yield
+
+    monkeypatch.setattr(langfuse, "propagate_attributes", _noop_attrs)
+    fake = _FakeClient()
+    monkeypatch.setattr(tracing, "_client", fake)
+
+    t = AskTracer("what did dana@acme.test file?", "org-1", "user-1", "claude", "m")
+    t.sources([{"path": "hr/dana@acme.test-review.txt"}], None)
+    t.token("her SSN is ")
+    t.token("123-45-6789")
+    t.done(10, 5, 0.001)
+    t.finish()
+
+    root = fake.root
+    retrieval, generation = root.children
+    assert "dana@acme.test" not in root.start_kwargs["input"]
+    assert "[REDACTED-EMAIL]" in root.start_kwargs["input"]
+    assert "dana@acme.test" not in str(retrieval.updates[0]["output"])
+    assert "123-45-6789" not in generation.updates[0]["output"]
+    assert "[REDACTED-SSN]" in generation.updates[0]["output"]
+    assert "123-45-6789" not in str(root.trace_io)
+
+
+def test_tracer_does_not_send_the_users_email_address(monkeypatch):
+    """user_id already ties a trace to a person. The address is the one field
+    here that identifies one on its own, so it does not go."""
+    @contextlib.contextmanager
+    def _noop_attrs(**_kw):
+        yield
+
+    monkeypatch.setattr(langfuse, "propagate_attributes", _noop_attrs)
+    fake = _FakeClient()
+    monkeypatch.setattr(tracing, "_client", fake)
+
+    AskTracer("q", "org-1", "user-1", "claude", "m").finish()
+    assert "email" not in fake.root.start_kwargs["metadata"]
+
+
+def test_a_streamed_secret_split_across_tokens_is_still_redacted(monkeypatch):
+    """Redaction happens at the join. Per token, "123-45-" and "6789" each look
+    harmless, and the pattern only exists once they are back together."""
+    @contextlib.contextmanager
+    def _noop_attrs(**_kw):
+        yield
+
+    monkeypatch.setattr(langfuse, "propagate_attributes", _noop_attrs)
+    fake = _FakeClient()
+    monkeypatch.setattr(tracing, "_client", fake)
+
+    t = AskTracer("q", "org-1", "user-1", "claude", "m")
+    t.sources([], None)
+    for piece in ("123", "-45", "-6789"):
+        t.token(piece)
+    t.done(1, 1, 0.0)
+    assert fake.root.children[1].updates[0]["output"] == "[REDACTED-SSN]"
 
 
 def test_ask_still_streams_with_tracing_path():
