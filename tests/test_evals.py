@@ -20,6 +20,11 @@ def test_grounded_answer_eval_passes():
     assert result["passed"], result["detail"]
 
 
+def test_prompt_injection_eval_passes():
+    result = evals.prompt_injection_eval()
+    assert result["passed"], result["detail"]
+
+
 def test_path_injection_eval_passes():
     result = evals.path_injection_eval()
     assert result["passed"], result["detail"]
