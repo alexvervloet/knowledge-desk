@@ -165,8 +165,12 @@ get a file into the corpus. Passages are wrapped in explicit untrusted-content
 markers, the system prompt says context is data and never instructions, and any
 occurrence of those markers inside a document is neutralized first, so a document
 cannot forge a closing delimiter and escape into what looks like instruction
-space. A merge-gating eval asserts the boundary survives a document that tries
-exactly that.
+space. That neutralisation covers the document's path as well as its text: the
+path is uploaded with the same provenance and is rendered on the citation line
+*outside* the markers, which made it the better place to attack until it was
+closed. The upload schema also refuses a path containing a control character, so
+a newline cannot break the citation line where no marker is involved. Two
+merge-gating evals assert the boundary survives, one per field.
 
 This is mitigation, not a proof. Delimiting and instructing reduce the success
 rate of injection; they do not make a language model incapable of being talked
@@ -252,10 +256,15 @@ being adequate.
 PII detection runs at ingest and flags obvious formats (email, phone, SSN, card
 shapes) on the document row. It is a **visibility signal, not a gate**: a
 document with PII still ingests and is still retrievable. PII is redacted out of
-audit log detail, not out of documents.
+audit log detail, not out of documents. It is also redacted out of everything
+sent to Langfuse — question, answer, and document paths — because that is a third
+party, and the argument for storing a question in the clear in Postgres (it is
+content, and reading it already means being an admin of the asker's own org) does
+not travel with it.
 
 With Langfuse keys set, each question also emits a trace tagged by org and user,
-whose retriever span carries `org_chunks` versus `allowed_chunks`. That makes the
+whose retriever span carries `org_chunks` versus `allowed_chunks`. The user is
+tagged by id, not by email address. That makes the
 permission filter visible per request: you can see that a user was shown 2 of the
 org's 5 chunks, which is the kind of thing that is otherwise invisible until it
 is a security incident.
