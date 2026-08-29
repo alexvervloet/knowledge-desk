@@ -18,3 +18,8 @@ def test_permission_leak_eval_passes():
 def test_grounded_answer_eval_passes():
     result = evals.grounded_answer_eval()
     assert result["passed"], result["detail"]
+
+
+def test_path_injection_eval_passes():
+    result = evals.path_injection_eval()
+    assert result["passed"], result["detail"]
