@@ -125,7 +125,7 @@ convention the model chooses to honour rather than a rule a parser enforces. A
 document containing `SYSTEM: ignore all previous instructions` is an injection
 attack whose interpreter is a neural network and whose escaping rules are
 probabilistic. The defense is in
-[providers.py:47-77](../../../knowledge_desk/providers.py#L47-L85) and it is worth
+[providers.py:51-89](../../../knowledge_desk/providers.py#L51-L89) and it is worth
 reading because it is so unsatisfying compared to parameterised SQL.
 
 Wrong output is not an error. Your training says a bug throws, or returns a

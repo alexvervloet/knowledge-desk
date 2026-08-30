@@ -184,7 +184,7 @@ asked. Cost attribution is a product requirement wearing an engineering costume.
 Two things to take back to your team.
 
 Put the pricing table in one place. Here it is
-[providers.py:22-26](../../../knowledge_desk/providers.py#L22-L26), and cost is
+[providers.py:22-27](../../../knowledge_desk/providers.py#L22-L27), and cost is
 computed in exactly one function. Teams that scatter rates across a codebase have
 cost reporting that is wrong in ways nobody detects until a rate changes and only
 three of the five call sites get updated.

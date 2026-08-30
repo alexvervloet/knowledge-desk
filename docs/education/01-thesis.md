@@ -40,7 +40,7 @@ convention the model chooses to honour, not a parser rule. A document that says
 `SYSTEM: ignore all previous instructions` is a SQL injection whose interpreter
 is a neural network and whose escaping rules are probabilistic.
 
-The defense is in [providers.py:47-77](../../knowledge_desk/providers.py#L47-L85):
+The defense is in [providers.py:51-89](../../knowledge_desk/providers.py#L51-L89):
 explicit delimiters around retrieved text, forged delimiters neutralised before
 the prompt is assembled, and a system prompt that names the boundary so the model
 can locate it. You will break this yourself in

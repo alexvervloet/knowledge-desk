@@ -74,14 +74,23 @@ delimiter followed by `SYSTEM: ignore all previous instructions`. Then assert
 three things, and look at what they are:
 
 ```python
-boundary_intact = rendered.count(_DOC_OPEN) == 1 and rendered.count(_DOC_CLOSE) == 1
-wrapped = _DOC_OPEN in rendered and rendered.index(_DOC_OPEN) < rendered.index("SYSTEM:")
+boundary_intact = rendered.count(open_tag) == 1 and rendered.count(close_tag) == 1
+wrapped = open_tag in rendered and rendered.index(open_tag) < rendered.index("SYSTEM:")
 answered = bool(_sources(events))
 ```
 
 Exactly one opening and one closing marker, so the forged one was defused. The
 boundary opens before the attack text. And the document was still retrieved, so
 the test is exercising the real path.
+
+The fence-integrity eval is the same idea aimed one level up, and it exists
+because these three assertions have a shape worth noticing: each one names a
+field and a payload. `unfenced_untrusted` asks instead which uploader-supplied
+values landed outside the fence at all, so it fails on a field nobody wrote an
+eval for. It also asserts that the markers depend on the request nonce, which
+nothing else does: delete the nonce and every other eval here passes, because
+the layer underneath keeps the marker counts right while the boundary quietly
+stops being one.
 
 None of that asserts anything about what the model said. That is deliberate and
 it is the second technique worth learning: these assertions are about your code,
@@ -199,13 +208,19 @@ and it covers the properties that would actually end the product.
 
 The choices I would call out as correct:
 
-Structural assertions in the injection eval. `rendered.count(_DOC_OPEN) == 1`,
-`rendered.count(_DOC_CLOSE) == 1`, and the boundary opening before `SYSTEM:`.
-Deterministic, provider-independent, and they fail exactly when someone breaks
-`_neutralize` or reorders `_render_context`. The docstring says outright that
-this is what makes it meaningful against the mock. Reaching into
+Structural assertions in the injection evals. Marker counts, the boundary opening
+before `SYSTEM:`, and in the fence-integrity eval the question of which untrusted
+fields escaped the fence. Deterministic, provider-independent, and they fail
+exactly when someone breaks the assembly. The docstrings say outright that this
+is what makes them meaningful against the mock. Reaching into
 `providers._render_context` from an eval is a coupling I would normally object to,
 and here it is the point: the eval is testing the defense, not the model.
+
+The one I would call out as a mistake, since it was one: for a while the marker
+counts were the whole gate, and they cannot see a missing nonce. A layer can be
+deleted while every assertion about it stays green, if the assertions are about
+a symptom that another layer also produces. Assert the property, and then check
+that deleting the layer actually turns the assertion red.
 
 `k=50` in the leak eval's search call. Asking for far more results than exist
 defeats an implementation whose apparent safety comes from a small result set. If

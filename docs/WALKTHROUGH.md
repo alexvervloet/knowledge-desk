@@ -162,15 +162,20 @@ cannot get a plausible-sounding answer assembled from general knowledge either.
 whole job is reading files other people uploaded, the documents are
 attacker-controlled input: nobody needs to talk to the model, they only need to
 get a file into the corpus. Passages are wrapped in explicit untrusted-content
-markers, the system prompt says context is data and never instructions, and any
-occurrence of those markers inside a document is neutralized first, so a document
-cannot forge a closing delimiter and escape into what looks like instruction
-space. That neutralisation covers the document's path as well as its text: the
-path is uploaded with the same provenance and is rendered on the citation line
-*outside* the markers, which made it the better place to attack until it was
-closed. The upload schema also refuses a path containing a control character, so
-a newline cannot break the citation line where no marker is involved. Two
-merge-gating evals assert the boundary survives, one per field.
+markers whose digits are generated for that request alone, and the system prompt
+says context is data and never instructions. The nonce is what makes the markers
+a boundary rather than a convention: an attacker writes their document before the
+request that retrieves it exists, so the one thing they cannot put in it is a
+value that did not exist yet. Text merely *shaped* like a marker is defused as
+well, because a model will honour a marker that is close enough.
+
+Everything the uploader supplied sits inside the fence, the path included. Only
+the `[n]` citation label stays outside, because that is a number this system
+minted. The path used to sit out there on the citation line, which made it the
+easier of the two fields to attack, and the upload schema now also refuses a path
+containing a control character. Three merge-gating evals cover this: one per
+field, plus one that asks the general question of which untrusted values landed
+outside the fence at all.
 
 This is mitigation, not a proof. Delimiting and instructing reduce the success
 rate of injection; they do not make a language model incapable of being talked

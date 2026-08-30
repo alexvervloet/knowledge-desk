@@ -8,12 +8,14 @@ drifted, the symbol name next to it will still find the code.
 
 | Concept | Where | What to notice |
 |---|---|---|
-| System prompt | [providers.py:27-45](../../knowledge_desk/providers.py#L27-L45) `_SYSTEM` | Two jobs in one prompt: answer only from context, and treat context as data. Both are load-bearing. |
-| Untrusted-content boundary | [providers.py:47-59](../../knowledge_desk/providers.py#L47-L61) `_DOC_OPEN`, `_neutralize` | Delimiters the system prompt can refer to, plus the code that stops a document forging them — in its path as well as its text. |
-| Rendering retrieved passages | [providers.py:61-77](../../knowledge_desk/providers.py#L69-L85) `_render_context` | Where untrusted text is wrapped before it ever reaches the model. |
-| Streaming interface | [providers.py:95](../../knowledge_desk/providers.py#L107), [providers.py:135](../../knowledge_desk/providers.py#L147) `stream` | Mock and Claude implement the same event contract: zero or more `token`, exactly one `usage`, last. |
-| Keyless mock fallback | [providers.py:83-113](../../knowledge_desk/providers.py#L95-L124) `MockAnswerProvider` | Loud on purpose — a banner in every reply, so a mock answer can never be mistaken for a real one. |
-| Token cost estimate | [providers.py:54-58](../../knowledge_desk/providers.py#L62-L66) `_cost` | Per-million-token pricing table; the only place money is computed. |
+| System prompt | [providers.py:29-48](../../knowledge_desk/providers.py#L29-L48) `_SYSTEM` | Two jobs in one prompt: answer only from context, and treat context as data. Both are load-bearing. |
+| Untrusted-content boundary | [providers.py:51-64](../../knowledge_desk/providers.py#L51-L64) `fence_tags` | Markers carrying a per-request nonce. A fixed delimiter is one the attacker can simply type. |
+| Defusing marker-shaped text | [providers.py:67-89](../../knowledge_desk/providers.py#L67-L89) `_neutralize` | The weaker second layer, for the model that honours a marker merely close enough. |
+| Rendering retrieved passages | [providers.py:97-117](../../knowledge_desk/providers.py#L97-L117) `_render_context` | Everything the uploader supplied goes inside the fence; only the minted `[n]` label stays out. |
+| The region a fence cannot cover | [providers.py:129-188](../../knowledge_desk/providers.py#L129-L188) `unfenced_untrusted` | Asks which untrusted values landed outside the markers. Gates the property, not the two fields with evals. |
+| Streaming interface | [providers.py:236](../../knowledge_desk/providers.py#L236), [providers.py:279](../../knowledge_desk/providers.py#L279) `stream` | Mock and Claude implement the same event contract: zero or more `token`, exactly one `usage`, last. |
+| Keyless mock fallback | [providers.py:222-254](../../knowledge_desk/providers.py#L222-L254) `MockAnswerProvider` | Loud on purpose — a banner in every reply, so a mock answer can never be mistaken for a real one. |
+| Token cost estimate | [providers.py:92-95](../../knowledge_desk/providers.py#L92-L95) `_cost` | Per-million-token pricing table; the only place money is computed. |
 | Orchestration | [assistant.py:50-154](../../knowledge_desk/assistant.py#L50-L153) `answer_stream` | The whole request lifecycle in one readable function. Start here. |
 | Refusal instead of guessing | [assistant.py:29-32](../../knowledge_desk/assistant.py#L29-L32), [:90-96](../../knowledge_desk/assistant.py#L89-L95) | Empty permitted retrieval → refuse. The access boundary reaching the generated text. |
 | SSE frames over HTTP | [main.py:328-350](../../knowledge_desk/main.py#L332-L354) `ask` | Event dicts become `data:` lines. Frontend parser: [api.ts](../../frontend/src/api.ts). |
