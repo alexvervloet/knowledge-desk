@@ -143,3 +143,24 @@ def test_deleted_document_not_retrieved():
     # Re-upload without a.txt marks it deleted; its chunks are gone.
     client.post("/sources/folder", headers=auth(owner), json={"documents": []})
     assert "a.txt" not in found(owner, "alpha content here")
+
+
+def test_an_empty_acl_denies_rather_than_defaulting_to_the_org():
+    """`acl: []` is a caller saying nobody. It used to be read as "unset" and
+    handed the org-wide default, so the one request asking for the tightest
+    permission available got the loosest one instead."""
+    owner = signup("acme", "owner@acme.test")
+    upload(owner, [{"path": "locked.txt", "content": SECRET, "acl": []}])
+
+    assert found(owner, SECRET) == set()
+    doc = next(d for d in client.get("/documents", headers=auth(owner)).json()
+               if d["path"] == "locked.txt")
+    assert doc["acl"] == []
+
+
+def test_an_absent_acl_still_takes_the_org_wide_default():
+    """The other half. Not naming an ACL is not the same statement as naming an
+    empty one, and the default has to keep working or every upload breaks."""
+    owner = signup("acme", "owner@acme.test")
+    upload(owner, [{"path": "open.txt", "content": SECRET}])
+    assert "open.txt" in found(owner, SECRET)

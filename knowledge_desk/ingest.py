@@ -22,6 +22,8 @@ from knowledge_desk.chunking import chunk_text
 from knowledge_desk.db import connect, require_row
 from knowledge_desk.embeddings import get_embedder
 
+# What a document gets when the upload does not mention an ACL at all. An upload
+# that names an empty one is a different statement and is stored as given.
 DEFAULT_ACL = ["public-to-org"]
 
 
@@ -63,7 +65,13 @@ def sync_documents(
         for item in items:
             content = item["content"]
             content_hash = _hash(content)
-            acl = item.get("acl") or DEFAULT_ACL
+            # `or` here treated an explicit empty ACL as "unset" and handed the
+            # document the org-wide default, so a caller asking for "nobody" got
+            # "everybody in this org": the one mistake in this direction that a
+            # permission system must not make. Absent means unspecified and takes
+            # the default; empty means empty, and matches no principal.
+            raw_acl = item.get("acl")
+            acl = DEFAULT_ACL if raw_acl is None else raw_acl
             prior = existing.get(item["path"])
 
             if (
