@@ -20,7 +20,7 @@ from typing import Any
 
 from knowledge_desk import audit, retrieval
 from knowledge_desk.config import settings
-from knowledge_desk.providers import get_answer_provider
+from knowledge_desk.providers import count_defused, get_answer_provider
 from knowledge_desk.tenancy import TenantScope
 from knowledge_desk.tracing import AskTracer
 
@@ -86,6 +86,14 @@ def answer_stream(
         answer_id = scope.record_answer(question, provider.name, refused)
         audit.log(scope.org_id, scope.ctx.user_id, "question.asked",
                   {"answer_id": answer_id, "refused": refused})
+
+        # Defusing a grammar forgery silently throws away the only interesting
+        # thing about it. A corpus where this is nonzero and rising is a corpus
+        # somebody is writing into, and nothing else in the system would say so.
+        forged = count_defused(contexts)
+        if forged:
+            audit.log(scope.org_id, scope.ctx.user_id, "retrieval.grammar_defused",
+                      {"answer_id": answer_id, "spans": forged})
 
         yield {"type": "meta", "answer_id": answer_id, "provider": provider.name}
 

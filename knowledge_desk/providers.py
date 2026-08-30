@@ -15,6 +15,7 @@ import secrets
 from collections.abc import Iterator
 from typing import Any
 
+from knowledge_desk import normalize
 from knowledge_desk.config import settings
 
 MOCK_BANNER = "[MOCK] no answer-model key set; this reply is not model-generated."
@@ -64,29 +65,74 @@ def fence_tags(nonce: str) -> tuple[str, str]:
     return f"<<<UNTRUSTED_DOCUMENT {nonce}>>>", f"<<<END_UNTRUSTED_DOCUMENT {nonce}>>>"
 
 
-# Anything shaped like one of our markers, whatever digits it carries. The nonce
-# already makes a forged marker invalid, but a model is a fuzzy reader and may
-# honour a close marker that is merely close enough. Stripping marker-shaped runs
-# out of the document too means it is never asked to choose between two. Case and
-# whitespace vary freely here, because they vary freely for a reader as well.
-_TAG_SHAPED = re.compile(
-    r"<+\s*/?\s*(?:END[_\s-]*)?UNTRUSTED[_\s-]*DOCUMENT[^>]*>+", re.IGNORECASE
-)
+# The prompt is a document with a grammar: markers around each passage, a `[n]`
+# citation label, a `path:` line. A passage concatenated verbatim joins that
+# grammar, and the model has no way to tell a heading the application wrote from
+# one the document did. Each pattern below is a piece of that grammar, matched
+# against folded text so a lookalike spelling cannot walk past it.
+#
+# The nonce already makes a forged marker invalid. This is the layer for a model
+# that honours a marker which is merely close enough, and for the parts of the
+# grammar that sit inside the fence where the nonce cannot help.
+_GRAMMAR = [
+    # Fence markers, in any dialect. Whitespace and case vary freely.
+    (re.compile(r"<+\s*/?\s*(?:END[_\s-]*)?UNTRUSTED[_\s-]*DOCUMENT[^>]*>+",
+                re.IGNORECASE), "[marker removed]"),
+    # The citation label. A passage containing "[2]" can otherwise attribute its
+    # own claims to a passage the asker was allowed to see, and a citation check
+    # would validate it, because the key is real. The cost is honest: a document
+    # with genuine footnote markers loses them. Better than a citation that
+    # resolves to the wrong source.
+    (re.compile(r"\[\s*\d{1,3}\s*\]"), "[citation removed]"),
+    # The path line inside the fence, which is our grammar even though it sits in
+    # the untrusted region.
+    (re.compile(r"(?m)^\s*path\s*:", re.IGNORECASE), "[path line removed]"),
+]
+
+
+def _defuse(text: str) -> tuple[str, int]:
+    """Defuse anything in `text` shaped like the prompt's own grammar.
+
+    Returns the defused text and how many spans were replaced.
+
+    Matching happens on folded text so an invisible character or a Cyrillic
+    lookalike cannot spell a marker past the pattern, and replacement happens on
+    the original through the offset map, because rewriting the document into its
+    folded form would destroy the evidence an incident review needs. Defuses
+    rather than deletes for the same reason: the first question afterwards is
+    what the document actually said.
+
+    Refolds between patterns, since each replacement changes the offsets the next
+    one has to map through. No replacement marker matches any of the patterns, so
+    this settles in one pass per pattern.
+    """
+    total = 0
+    for pattern, marker in _GRAMMAR:
+        folded, origin = normalize.fold(text)
+        spans = [
+            normalize.original_span(origin, m.start(), m.end(), len(text))
+            for m in pattern.finditer(folded)
+        ]
+        if spans:
+            text = normalize.replace_folded(text, spans, marker)
+            total += len(spans)
+    return text, total
 
 
 def _neutralize(text: str) -> str:
-    """Defuse marker-shaped text inside a document.
+    """Defuse marker- and grammar-shaped text inside a document."""
+    return _defuse(text)[0]
 
-    Runs over every field of the document that reaches the prompt. Defuses rather
-    than deletes: after an incident the first question is what the document
-    actually said, and a control that erases the evidence answers it badly.
 
-    Second of two mechanisms and the weaker one. `fence_tags` is the real
-    boundary; this only covers the case where the model reads a near-miss as the
-    real thing anyway. It used to be an exact string replace, which meant a
-    spaced, lowercased, or otherwise near-miss marker passed straight through.
+def count_defused(contexts: list[dict[str, Any]]) -> int:
+    """How many grammar forgeries the retrieved passages carry between them.
+
+    Worth counting rather than only defusing. A corpus where this is nonzero and
+    rising is a corpus somebody is writing into, and that is a fact about the
+    tenant that nothing else in the system would surface.
     """
-    return _TAG_SHAPED.sub("[marker removed]", text)
+    return sum(_defuse(str(c.get("path", "")))[1] + _defuse(str(c.get("text", "")))[1]
+               for c in contexts)
 
 
 def _cost(model: str, input_tokens: int, output_tokens: int) -> float:

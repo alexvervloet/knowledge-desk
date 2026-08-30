@@ -18,6 +18,8 @@ from typing import Annotated
 
 from pydantic import AfterValidator, BaseModel, Field
 
+from knowledge_desk import normalize
+
 # Shared constraints, named once so the same rule cannot drift between two
 # endpoints that mean the same thing by it.
 Slug = Field(pattern=r"^[a-z0-9][a-z0-9-]{1,38}[a-z0-9]$")
@@ -27,17 +29,17 @@ Email = Field(min_length=3, max_length=200)
 
 
 def _no_control_characters(value: str) -> str:
-    """Reject control characters in a document path.
+    """Reject control and invisible characters in a document path.
 
-    A path is uploaded text, and it is rendered into the answer prompt on the
-    citation line above the passage. The renderer neutralizes our delimiters
-    wherever they appear, but a newline needs no delimiter to do damage: it ends
-    the citation line and opens a fresh one, which is most of what an injection
-    is after. A real file path has no use for a control character, so the
-    cheapest place to settle it is here, before the text is ever stored.
+    A path is uploaded text and it is rendered into the answer prompt. The
+    renderer defuses grammar-shaped runs wherever they appear, but a newline
+    needs no marker to do damage, and an invisible character exists for no
+    purpose here except to make one string compare unequal to another that reads
+    identically. A real file path needs neither, so the cheapest place to settle
+    it is here, before the text is ever stored.
     """
-    if any(ch < " " or ch == "\x7f" for ch in value):
-        raise ValueError("must not contain control characters")
+    if any(ch < " " or ch == "\x7f" or normalize.is_invisible(ch) for ch in value):
+        raise ValueError("must not contain control or invisible characters")
     return value
 
 
