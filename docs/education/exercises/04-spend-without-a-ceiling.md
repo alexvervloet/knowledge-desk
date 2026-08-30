@@ -58,13 +58,13 @@ you will have to make in your own system:
 1. **No `sources` frame.** Retrieval never ran. The block happens before any
    work, not just before the model.
 2. **The message is specific.** Unlike the error path
-   ([assistant.py:123-138](../../../knowledge_desk/assistant.py#L122-L137)), which
+   ([assistant.py:141-156](../../../knowledge_desk/assistant.py#L141-L156)), which
    deliberately hands the caller an opaque reference because exception text
    leaks database hosts and role names, this message is one *we* wrote and is
    safe to show. "You are over budget" is actionable; "something went wrong" is
    a support ticket.
 3. **The refusal is still recorded.** The answer row is written and marked
-   blocked ([assistant.py:70-73](../../../knowledge_desk/assistant.py#L69-L72)),
+   blocked ([assistant.py:69-72](../../../knowledge_desk/assistant.py#L69-L72)),
    and an audit entry is logged. A refusal you cannot count is a refusal you
    cannot debug — when someone reports "it stopped answering", you need the
    number of blocks and their reason, not silence.
@@ -127,7 +127,7 @@ git checkout knowledge_desk/assistant.py
 ## Part C: the bill that arrives after the client leaves
 
 The last trap needs no edit — just read
-[assistant.py:139-153](../../../knowledge_desk/assistant.py#L138-L152) and work out
+[assistant.py:157-171](../../../knowledge_desk/assistant.py#L157-L171) and work out
 why the `finally` block is there.
 
 Billing happens when the provider emits its `usage` frame, which is the last

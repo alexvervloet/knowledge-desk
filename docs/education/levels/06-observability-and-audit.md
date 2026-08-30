@@ -88,7 +88,7 @@ Ordering-dependent regex sets are exactly the sort of thing that quietly breaks
 when someone appends a new pattern, and the comment is what stops that.
 
 Error handling, in
-[assistant.py:123-138](../../../knowledge_desk/assistant.py#L122-L137):
+[assistant.py:141-156](../../../knowledge_desk/assistant.py#L141-L156):
 
 ```python
 reference = secrets.token_hex(4)
@@ -134,7 +134,7 @@ broken configuration look identical.
 Second thing at this level: the asymmetry between the audit log and stored
 questions. Audit detail is PII-redacted. The question text stored in `answers` is
 not, and the reasoning is written out at
-[tenancy.py:384-396](../../../knowledge_desk/tenancy.py#L408-L420). An audit entry is
+[tenancy.py:408-420](../../../knowledge_desk/tenancy.py#L408-L420). An audit entry is
 metadata about an action, where a stray email address is incidental and redacting
 it costs nothing. A question is the content. Redact it and `top_queries` shows
 `[REDACTED-EMAIL]` and an answer can no longer be traced back to what was asked.
@@ -253,7 +253,7 @@ customer document content. That is a defensible product decision and an
 indefensible surprise, so it belongs in the docs rather than only in the code.
 
 The best single line in this area is the reasoning at
-[tenancy.py:384-396](../../../knowledge_desk/tenancy.py#L408-L420) for why questions
+[tenancy.py:408-420](../../../knowledge_desk/tenancy.py#L408-L420) for why questions
 are stored unredacted while audit detail is not. It states the asymmetry, gives
 the mechanism that would break under the alternative, names who can read the
 data, and then says plainly that this is where user-typed text accumulates in the

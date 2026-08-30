@@ -30,7 +30,7 @@ Knowledge Desk does it the good way, and the whole trick is that the permission
 check and the "find the closest matches" step happen in the same operation
 instead of one after the other. In code that means one database query does both
 things at once. You can read it at
-[tenancy.py:359-380](../../../knowledge_desk/tenancy.py#L383-L404). It is about
+[tenancy.py:383-404](../../../knowledge_desk/tenancy.py#L383-L404). It is about
 eight lines.
 
 There is a second reason the good way is better, and it is the serious one. In
@@ -232,7 +232,7 @@ described above.
 
 ## Level 5: senior AI engineer
 
-The query is [tenancy.py:359-380](../../../knowledge_desk/tenancy.py#L383-L404).
+The query is [tenancy.py:383-404](../../../knowledge_desk/tenancy.py#L383-L404).
 Filter and ranking in one statement, `c.acl ?| principals` alongside
 `order by c.embedding <=> vec limit k`, org id on top as the tenant boundary.
 Nothing surprising in the shape. The interesting content is in the three

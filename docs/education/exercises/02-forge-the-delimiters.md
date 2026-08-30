@@ -22,27 +22,27 @@ gate. That is the exercise.
 
 ## The four parts
 
-Read [providers.py:29-188](../../../knowledge_desk/providers.py#L29-L188) first:
+Read [providers.py:30-253](../../../knowledge_desk/providers.py#L30-L253) first:
 
 1. **A system prompt that names the boundary.** It tells the model the passages
    are untrusted data, may imitate system prompts, and that instructions inside
    them are never followed
-   ([providers.py:29-48](../../../knowledge_desk/providers.py#L29-L48)).
+   ([providers.py:30-49](../../../knowledge_desk/providers.py#L30-L49)).
 2. **Markers carrying a per-request nonce.** `<<<UNTRUSTED_DOCUMENT a1b2c3d4>>>`,
    where the digits are minted for this request and named in the user turn
-   ([providers.py:51-64](../../../knowledge_desk/providers.py#L51-L64)). This is
+   ([providers.py:61-74](../../../knowledge_desk/providers.py#L61-L74)). This is
    the boundary. Everything else on this list is support.
 3. **Defusing text shaped like the prompt's own grammar**: markers, `[n]`
    citation keys, and the `path:` line, matched after folding so a lookalike
    spelling cannot walk past
-   ([providers.py:67-89](../../../knowledge_desk/providers.py#L67-L89)). A
+   ([providers.py:77-154](../../../knowledge_desk/providers.py#L77-L154)). A
    passage containing `[2]` can otherwise attribute its claims to a real passage
    the asker was allowed to see, and a citation check validates that, because the
    key exists.
 4. **Keeping untrusted values inside the fence.** A fence protects the region
    between its markers and can do nothing at all for the region outside them, so
    the fence is worth precisely what the assembly keeps out of there
-   ([providers.py:129-188](../../../knowledge_desk/providers.py#L129-L188)).
+   ([providers.py:194-253](../../../knowledge_desk/providers.py#L194-L253)).
 
 Part 2 is the only one an attacker cannot work around by being clever, and the
 reason is worth stating plainly. They write their document today. It gets
@@ -51,7 +51,7 @@ exist at the time they wrote it.
 
 ## Edit 1: remove the nonce
 
-Open [providers.py:51-64](../../../knowledge_desk/providers.py#L51-L64) and make
+Open [providers.py:61-74](../../../knowledge_desk/providers.py#L61-L74) and make
 `fence_tags` ignore its argument, which is what a fixed delimiter is:
 
 ```python

@@ -66,7 +66,7 @@ document to close the fence early and pretend to be back outside it, two things
 stop them. The markers carry digits minted for this request, which a document
 written last week cannot contain, and anything merely *shaped* like a marker is
 scrubbed out of the document first, in
-[providers.py:67-89](../../../knowledge_desk/providers.py#L67-L89).
+[providers.py:77-154](../../../knowledge_desk/providers.py#L77-L154).
 
 I want to be straight with you about how strong this is. In normal programming,
 when you keep data away from instructions, you have a real guarantee. Here you
@@ -100,13 +100,13 @@ gets a nice answer, and does not realise nothing was called. Making the fake
 obviously fake is worth more than making it realistic.
 
 The prompt has two parts. The system prompt, `_SYSTEM` at
-[providers.py:29-48](../../../knowledge_desk/providers.py#L29-L48), carries both
+[providers.py:30-49](../../../knowledge_desk/providers.py#L30-L49), carries both
 rules: answer only from context and cite by number, and treat the context as
 untrusted data rather than instructions. The user message is the rendered
 passages plus the question.
 
 Rendering, at
-[providers.py:97-117](../../../knowledge_desk/providers.py#L97-L117), is where the
+[providers.py:162-182](../../../knowledge_desk/providers.py#L162-L182), is where the
 security work happens:
 
 ```python
@@ -131,14 +131,14 @@ reads the result. Here the reader is a model, and "it will respect the fence" is
 a strong empirical tendency, not a theorem.
 
 Streaming. The answer arrives token by token. The API turns each token event into
-a Server Sent Events frame, in [main.py:328-350](../../../knowledge_desk/main.py#L332-L354),
+a Server Sent Events frame, in [main.py:332-354](../../../knowledge_desk/main.py#L332-L354),
 which is a long-lived HTTP response where the server writes `data: ...` lines as
 they become available. The browser reads them as they arrive. The reason to
 bother is entirely perceived latency: a four second wait with text appearing
 feels fine, and four seconds of spinner does not.
 
 Refusal, in [assistant.py](../../../knowledge_desk/assistant.py#L29-L32) and
-[:90-96](../../../knowledge_desk/assistant.py#L89-L95): if retrieval returns no
+[:90-96](../../../knowledge_desk/assistant.py#L89-L103): if retrieval returns no
 permitted chunks, the model is never called at all. A fixed refusal string is
 streamed instead. No API call, no cost, no chance of the model filling the gap
 from memory.
@@ -242,7 +242,7 @@ trust boundary. It is not one.
 
 Cost per call, and who pays. Priced per token in and per token out. The pricing
 table lives in exactly one place here,
-[providers.py:22-27](../../../knowledge_desk/providers.py#L22-L27), which is a
+[providers.py:23-28](../../../knowledge_desk/providers.py#L23-L28), which is a
 small thing that saves you an incident later, because scattering pricing across a
 codebase means your cost reporting is wrong in ways nobody notices until finance
 asks.
