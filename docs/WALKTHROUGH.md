@@ -50,7 +50,13 @@ This cost a CI run once. If you are scripting signups, use something like
 ## Step 2: uploading documents is a reconcile, not an append
 
 `POST /sources/folder` takes a list of documents (path, content, optional ACL)
-and treats them as the **complete desired state** of that source for that org. It
+and treats them as the **complete desired state** of that source for that org.
+
+The ACL field distinguishes absent from empty, and the difference matters. Not
+naming one means "unspecified" and takes the org-wide default; naming `[]` means
+"nobody" and is stored as given, matching no principal. Reading the two as the
+same thing is how a request for the tightest permission available becomes the
+loosest one, which is the single direction a permission system must not fail in. It
 compares each incoming file's SHA-256 against what is stored and returns a
 summary like `{"enqueued": 1, "unchanged": 1, "deleted": 1}`:
 
@@ -173,9 +179,22 @@ Everything the uploader supplied sits inside the fence, the path included. Only
 the `[n]` citation label stays outside, because that is a number this system
 minted. The path used to sit out there on the citation line, which made it the
 easier of the two fields to attack, and the upload schema now also refuses a path
-containing a control character. Three merge-gating evals cover this: one per
-field, plus one that asks the general question of which untrusted values landed
-outside the fence at all.
+containing a control or invisible character.
+
+The defusing covers the prompt's whole grammar, not only the markers: a passage
+containing `[2]` would otherwise attribute its own claims to a real passage the
+asker was allowed to see, and a citation check would validate it because the key
+exists. Matching happens on folded text, so a Cyrillic lookalike or a zero-width
+space cannot spell a marker past the pattern, and replacement happens on the
+original, so the document is still the document that was uploaded. How many
+forgeries were defused is written to the audit log, because a corpus where that
+number is rising is one somebody is writing into.
+
+Finally there are deterministic checks on the finished answer: a citation outside
+the retrieved range, the fence coming back out, the system prompt repeated, a
+markdown image or link. Those are detectors, not a gate. The answer streams, so
+the caller has read it by then; the findings ride out in the `done` frame for the
+UI and land in the audit log. Four merge-gating evals cover all of this.
 
 This is mitigation, not a proof. Delimiting and instructing reduce the success
 rate of injection; they do not make a language model incapable of being talked

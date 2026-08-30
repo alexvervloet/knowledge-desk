@@ -10,7 +10,10 @@ drifted, the symbol name next to it will still find the code.
 |---|---|---|
 | System prompt | [providers.py:29-48](../../knowledge_desk/providers.py#L29-L48) `_SYSTEM` | Two jobs in one prompt: answer only from context, and treat context as data. Both are load-bearing. |
 | Untrusted-content boundary | [providers.py:51-64](../../knowledge_desk/providers.py#L51-L64) `fence_tags` | Markers carrying a per-request nonce. A fixed delimiter is one the attacker can simply type. |
-| Defusing marker-shaped text | [providers.py:67-89](../../knowledge_desk/providers.py#L67-L89) `_neutralize` | The weaker second layer, for the model that honours a marker merely close enough. |
+| Defusing the prompt's grammar | [providers.py:67-89](../../knowledge_desk/providers.py#L67-L89) `_GRAMMAR` | Markers, `[n]` citation keys, and the `path:` line. A passage that writes your grammar gets to lie about what kind of text it is. |
+| Folding before matching | [normalize.py](../../knowledge_desk/normalize.py) `fold` | A filter that compares bytes loses to an attacker who picks them. Keeps an offset map so replacement lands on the original. |
+| Counting what you defuse | [assistant.py](../../knowledge_desk/assistant.py) `count_defused` | A corpus where forgeries are nonzero and rising is one somebody is writing into. |
+| Output checks | [outputchecks.py](../../knowledge_desk/outputchecks.py) `check_answer` | The layer that does not guess. Detectors, not a gate: the answer has already streamed. |
 | Rendering retrieved passages | [providers.py:97-117](../../knowledge_desk/providers.py#L97-L117) `_render_context` | Everything the uploader supplied goes inside the fence; only the minted `[n]` label stays out. |
 | The region a fence cannot cover | [providers.py:129-188](../../knowledge_desk/providers.py#L129-L188) `unfenced_untrusted` | Asks which untrusted values landed outside the markers. Gates the property, not the two fields with evals. |
 | Streaming interface | [providers.py:236](../../knowledge_desk/providers.py#L236), [providers.py:279](../../knowledge_desk/providers.py#L279) `stream` | Mock and Claude implement the same event contract: zero or more `token`, exactly one `usage`, last. |

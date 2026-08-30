@@ -301,14 +301,28 @@ and the general form of the rule has a check of its own: `unfenced_untrusted`
 asks which uploader-supplied values appear outside the markers, and gates the
 property rather than the two fields that happen to have evals.
 
+There is an output-side check now, in
+[outputchecks.py](../../../knowledge_desk/outputchecks.py): a cited `[n]` outside
+the retrieved range, the fence coming back out of the model, the system prompt
+repeated, and markdown images or links. All matched on folded text, because an
+output check that reads raw bytes is the most embarrassing place to lose to a
+respelling.
+
+Read the caveat in that module rather than the list. Answers stream, so by the
+time one is complete the caller has read it, and these are detectors that report
+into the `done` frame and the audit log rather than a gate that held anything
+back. Gating means buffering the whole answer and giving up streaming, which is a
+real trade rather than an oversight. Calling it a gate would be the flattering
+description and the wrong one.
+
 What remains thinner than it reads:
 
-There is no output-side check at all. Nothing verifies that a cited `[n]` exists,
-that the answer's claims appear in the cited passage, or that the answer does not
-contain a passage the model was told not to disclose. For this project's thesis
-that is a defensible omission, and in a product I would want at minimum a
-citation-validity check, because a fabricated citation number is cheap to detect
-and destroys trust in the whole citation mechanism when a user notices it first.
+Nothing verifies that the answer's *claims* appear in the cited passage. Citation
+existence is checked; citation honesty is not, and the two are different
+properties. A model that reads a forged policy can attribute it to the real key
+of the passage that carried it, at which point the citation validates and the
+false claim reads as sourced. Pinning a quote to the source text is what closes
+that, and it is a larger piece of work than anything here.
 
 Cost estimation uses four characters per token, in `_estimate_tokens`, and it is
 correctly scoped: it only ever feeds a budget estimate for a stream that died
