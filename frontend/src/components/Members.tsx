@@ -33,7 +33,7 @@ export function Members({ me }: { me: Me }) {
       setAllMembers((await api.getPage<Member>("/members", 0, 500)).items);
     } catch (err) { setError(err instanceof ApiError ? err.message : "failed to load"); }
   }
-  useEffect(() => { load(0); }, []);
+  useEffect(() => { void load(0); }, []);
 
   function wrap(fn: () => Promise<unknown>) {
     setError("");

@@ -71,7 +71,7 @@ describe("askStream", () => {
     const words = ["the ", "sky ", "is ", "blue"];
     const stream = words.map((w) => frame({ type: "token", text: w })).join("");
     // One byte at a time: every frame boundary is split.
-    vi.stubGlobal("fetch", vi.fn(async () => streaming([...stream])));
+    vi.stubGlobal("fetch", vi.fn(async () => streaming(stream.split(""))));
 
     const [seen, onEvent] = collect();
     await askStream("q", onEvent);

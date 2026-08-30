@@ -10,11 +10,14 @@ import { Account } from "./components/Account";
 type Tab = "ask" | "sources" | "members" | "usage" | "account";
 
 export function App() {
-  const [me, setMe] = useState<Me | null | "loading">("loading");
+  // A missing token is knowable before the first render, so decide it here
+  // rather than setting state on the way into the mount effect.
+  const [me, setMe] = useState<Me | null | "loading">(() => (getToken() ? "loading" : null));
   const [tab, setTab] = useState<Tab>("ask");
 
+  // Reached only with a token in hand: the initial state covers a missing one,
+  // and Login calls this straight after storing a fresh one.
   async function loadMe() {
-    if (!getToken()) { setMe(null); return; }
     try {
       setMe(await api.get<Me>("/me"));
     } catch {
@@ -23,7 +26,11 @@ export function App() {
     }
   }
 
-  useEffect(() => { loadMe(); }, []);
+  // set-state-in-effect: every setMe in loadMe runs after an await, so none
+  // of them is the synchronous cascade the rule is looking for. Fetching the
+  // current user on mount is the external-system sync effects are for.
+  // oxlint-disable-next-line react/set-state-in-effect
+  useEffect(() => { if (getToken()) void loadMe(); }, []);
 
   async function logout() {
     try { await api.post("/auth/logout"); } catch { /* token may already be gone */ }

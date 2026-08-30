@@ -33,7 +33,7 @@ export function Usage() {
   }
 
   useEffect(() => {
-    (async () => {
+    void (async () => {
       try {
         setUsage(await api.get<UsageT>("/usage"));
         await loadAudit(0);

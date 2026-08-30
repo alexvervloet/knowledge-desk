@@ -21,7 +21,7 @@ export function Sources({ isAdmin }: { isAdmin: boolean }) {
     } catch (err) { setError(err instanceof ApiError ? err.message : "failed to load"); }
   }
 
-  useEffect(() => { refresh(0); }, []);
+  useEffect(() => { void refresh(0); }, []);
 
   async function onUpload(e: ChangeEvent<HTMLInputElement>) {
     const files = Array.from(e.target.files ?? []);
