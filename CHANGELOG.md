@@ -12,6 +12,44 @@ do, not merely a change to security-adjacent code.
 The migration files carry phase numbers in their comments as a record of when
 each was written. The sections below name which phases those were.
 
+## 2026-08-30 — Per-request fence around retrieved passages
+
+Follow-on to the review above, applying two controls the
+[DeepDives](https://github.com/alexvervloet/DeepDives) prompt-injection and
+GenAI-security chapters name explicitly and this project did not have.
+
+### Security
+
+- Fence untrusted passages with a per-request nonce. The markers now carry digits
+  minted for the request and named in the user turn. A fixed delimiter is one the
+  attacker can simply type; a document written before the request that retrieves
+  it cannot contain a value that did not exist yet. This is the boundary the
+  previous pass's neutralization was standing in for.
+- Move the document path inside the fence. Only the minted `[n]` citation label
+  stays outside now. Neutralizing the path made the previous attack fail, but the
+  path was still rendered in the one region a fence cannot protect, which is a
+  property of the assembly rather than of the fence.
+- Match marker *shapes* rather than two exact strings. A model will honour a
+  close marker that is merely close enough, and four of five near-miss spellings
+  (spaced, lowercased, trailing space, a different dialect) passed through the
+  exact-match version untouched.
+
+### Added
+
+- `unfenced_untrusted`, which asks which uploader-supplied values appear in the
+  part of the prompt the fence does not cover, matching on any run of 24
+  characters so a truncated quote is caught as well as a whole field. The
+  per-field evals gate the two fields they name; this gates the property.
+- A `fence-integrity` eval covering both of the above, plus an assertion that the
+  markers actually depend on the nonce. That last one was added because without
+  it the entire per-request boundary could be deleted with every eval still
+  passing (see LESSONS #35).
+
+### Changed
+
+- Exercise 2 is rebuilt around the two deletions and what each one does to the
+  gate, since its original edit no longer fails anything.
+
 ## 2026-08-29 — Security review remediation
 
 A review of prompt-injection defense and general application security raised
