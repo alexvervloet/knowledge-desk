@@ -74,7 +74,7 @@ class VoyageEmbedder:
         return self._embed([text], "query")[0]
 
 
-def get_embedder():
+def get_embedder() -> VoyageEmbedder | MockEmbedder:
     """Voyage when a key is present, otherwise the loud deterministic mock."""
     if settings.voyage_api_key:
         return VoyageEmbedder()

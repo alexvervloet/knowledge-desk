@@ -84,7 +84,7 @@ cheerfully summarises a document the asker cannot open.
 
 The rule this project follows: **filter inside the candidate fetch, never
 after.** The ACL predicate sits in the same SQL that ranks
-([tenancy.py:391-412](../../knowledge_desk/tenancy.py#L391-L412 "TenantScope.search")), so a forbidden
+([tenancy.py:397-418](../../knowledge_desk/tenancy.py#L397-L418 "TenantScope.search")), so a forbidden
 chunk is never scored, never ranked, and cannot survive a forgotten post-filter.
 A post-filter also silently returns fewer than `k` results, which looks like bad
 retrieval rather than a security design.

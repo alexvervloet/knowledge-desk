@@ -18,7 +18,7 @@ ranks. Here is what it costs you when it does not.
 
 ## The edit
 
-Open [tenancy.py:396-403](../../../knowledge_desk/tenancy.py#L396-L403) in
+Open [tenancy.py:397-403](../../../knowledge_desk/tenancy.py#L397-L403) in
 `TenantScope.search`. Remove the ACL predicate and its parameter:
 
 ```python
@@ -110,7 +110,7 @@ in a way that will cost you a week when it eventually bites:
   test that exists.
 
 The real query keeps the filter and the ranking together
-([tenancy.py:391-412](../../../knowledge_desk/tenancy.py#L391-L412 "TenantScope.search")), so `k` means
+([tenancy.py:397-418](../../../knowledge_desk/tenancy.py#L397-L418 "TenantScope.search")), so `k` means
 what it says and there is no window in which forbidden text exists in memory.
 Getting there needed a schema change: the ACL is denormalised onto the chunk row
 so the predicate and the vector live on the same relation, because a filter on

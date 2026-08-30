@@ -20,7 +20,8 @@ to do.
 from __future__ import annotations
 
 import json
-from typing import Annotated
+from collections.abc import Iterator
+from typing import Annotated, Any
 
 from fastapi import Depends, FastAPI, HTTPException, Query, Response, status
 from fastapi.middleware.cors import CORSMiddleware
@@ -82,7 +83,7 @@ app.add_middleware(
 
 
 @app.get("/healthz")
-def healthz() -> dict:
+def healthz() -> dict[str, Any]:
     return {"status": "ok", "version": __version__, "provider": settings.provider}
 
 
@@ -114,7 +115,7 @@ def logout(token: Annotated[str, Depends(bearer_token)]) -> Response:
 
 
 @app.get("/me")
-def me(ctx: Annotated[AuthContext, Depends(current_ctx)]) -> dict:
+def me(ctx: Annotated[AuthContext, Depends(current_ctx)]) -> dict[str, Any]:
     return {
         "user_id": ctx.user_id,
         "email": ctx.email,
@@ -148,7 +149,7 @@ def change_password(
 @app.post("/members", status_code=status.HTTP_201_CREATED)
 def add_member(
     req: AddMemberRequest, scope: Annotated[TenantScope, Depends(current_scope)]
-) -> dict:
+) -> dict[str, Any]:
     scope.require_can_grant(req.role)
     user_id = accounts.add_member(scope.org_id, req.email, req.password, req.role)
     audit.log(
@@ -163,7 +164,7 @@ def list_members(
     scope: Annotated[TenantScope, Depends(current_scope)],
     limit: int = Query(default=100, ge=1, le=500),
     offset: int = Query(default=0, ge=0),
-) -> list[dict]:
+) -> list[dict[str, Any]]:
     response.headers["X-Total-Count"] = str(scope.count_members())
     return scope.list_members(limit, offset)
 
@@ -171,7 +172,7 @@ def list_members(
 @app.patch("/members/{user_id}")
 def set_member_role(
     user_id: str, req: SetRoleRequest, scope: Annotated[TenantScope, Depends(current_scope)]
-) -> dict:
+) -> dict[str, Any]:
     scope.set_member_role(user_id, req.role)
     audit.log(
         scope.org_id,
@@ -195,17 +196,19 @@ def remove_member(user_id: str, scope: Annotated[TenantScope, Depends(current_sc
 @app.post("/groups", status_code=status.HTTP_201_CREATED)
 def create_group(
     req: CreateGroupRequest, scope: Annotated[TenantScope, Depends(current_scope)]
-) -> dict:
+) -> dict[str, Any]:
     return scope.create_group(req.name)
 
 
 @app.get("/groups")
-def list_groups(scope: Annotated[TenantScope, Depends(current_scope)]) -> list[dict]:
+def list_groups(scope: Annotated[TenantScope, Depends(current_scope)]) -> list[dict[str, Any]]:
     return scope.list_groups()
 
 
 @app.get("/groups/{group_id}")
-def get_group(group_id: str, scope: Annotated[TenantScope, Depends(current_scope)]) -> dict:
+def get_group(
+    group_id: str, scope: Annotated[TenantScope, Depends(current_scope)]
+) -> dict[str, Any]:
     return scope.get_group(group_id)
 
 
@@ -218,7 +221,7 @@ def delete_group(group_id: str, scope: Annotated[TenantScope, Depends(current_sc
 @app.get("/groups/{group_id}/members")
 def list_group_members(
     group_id: str, scope: Annotated[TenantScope, Depends(current_scope)]
-) -> list[dict]:
+) -> list[dict[str, Any]]:
     return scope.list_group_members(group_id)
 
 
@@ -227,7 +230,7 @@ def add_group_member(
     group_id: str,
     req: AddGroupMemberRequest,
     scope: Annotated[TenantScope, Depends(current_scope)],
-) -> dict:
+) -> dict[str, Any]:
     user_id = scope.add_group_member_by_email(group_id, req.email)
     return {"group_id": group_id, "user_id": user_id}
 
@@ -248,7 +251,7 @@ LOCAL_FOLDER_SOURCE = "local-folder"
 @app.post("/sources/folder", status_code=status.HTTP_202_ACCEPTED)
 def upload_folder(
     req: FolderUploadRequest, scope: Annotated[TenantScope, Depends(current_scope)]
-) -> dict:
+) -> dict[str, Any]:
     """Reconcile an org's local-folder documents and enqueue ingest jobs for the
     ones that changed. Returns immediately (202); the worker does the embedding.
     """
@@ -264,7 +267,7 @@ def list_documents(
     scope: Annotated[TenantScope, Depends(current_scope)],
     limit: int = Query(default=100, ge=1, le=500),
     offset: int = Query(default=0, ge=0),
-) -> list[dict]:
+) -> list[dict[str, Any]]:
     response.headers["X-Total-Count"] = str(scope.count_documents())
     return scope.list_documents(limit, offset)
 
@@ -283,7 +286,7 @@ def update_document_acl(
     document_id: str,
     req: UpdateAclRequest,
     scope: Annotated[TenantScope, Depends(current_scope)],
-) -> dict:
+) -> dict[str, Any]:
     scope.update_document_acl(document_id, req.acl)
     audit.log(scope.org_id, scope.ctx.user_id, "document.acl_changed", {"document_id": document_id})
     return {"document_id": document_id, "acl": req.acl}
@@ -293,7 +296,7 @@ def update_document_acl(
 
 
 @app.get("/org/export")
-def export_org(scope: Annotated[TenantScope, Depends(current_scope)]) -> dict:
+def export_org(scope: Annotated[TenantScope, Depends(current_scope)]) -> dict[str, Any]:
     return scope.export()
 
 
@@ -310,7 +313,9 @@ def delete_org(scope: Annotated[TenantScope, Depends(current_scope)]) -> Respons
 
 
 @app.post("/search")
-def search(req: SearchRequest, scope: Annotated[TenantScope, Depends(current_scope)]) -> list[dict]:
+def search(
+    req: SearchRequest, scope: Annotated[TenantScope, Depends(current_scope)]
+) -> list[dict[str, Any]]:
     """Nearest chunks the caller is permitted to see. Access filtering happens in
     the candidate fetch, so results can only ever contain allowed content.
     """
@@ -321,7 +326,9 @@ def search(req: SearchRequest, scope: Annotated[TenantScope, Depends(current_sco
 
 
 @app.post("/ask")
-def ask(req: AskRequest, scope: Annotated[TenantScope, Depends(current_scope)]):
+def ask(
+    req: AskRequest, scope: Annotated[TenantScope, Depends(current_scope)]
+) -> StreamingResponse:
     """Stream a grounded, access-scoped answer as SSE. Each event is one
     `data: {json}` frame: meta, sources, token(s), then done (or error).
 
@@ -339,7 +346,7 @@ def ask(req: AskRequest, scope: Annotated[TenantScope, Depends(current_scope)]):
 
     k = req.k or settings.retrieval_k
 
-    def frames():
+    def frames() -> Iterator[str]:
         for event in assistant.answer_stream(scope, req.question, k):
             yield f"data: {json.dumps(event)}\n\n"
 
@@ -355,20 +362,22 @@ def audit_log(
     scope: Annotated[TenantScope, Depends(current_scope)],
     limit: int = Query(default=100, ge=1, le=500),
     offset: int = Query(default=0, ge=0),
-) -> list[dict]:
+) -> list[dict[str, Any]]:
     """Recent audit events for the caller's org. Admin only."""
     response.headers["X-Total-Count"] = str(scope.count_audit())
     return scope.list_audit(limit, offset)
 
 
 @app.get("/usage")
-def usage(scope: Annotated[TenantScope, Depends(current_scope)]) -> dict:
+def usage(scope: Annotated[TenantScope, Depends(current_scope)]) -> dict[str, Any]:
     """Org usage against its caps, for the admin dashboard. Admin only."""
     return scope.usage_summary()
 
 
 @app.post("/feedback", status_code=status.HTTP_201_CREATED)
-def feedback(req: FeedbackRequest, scope: Annotated[TenantScope, Depends(current_scope)]) -> dict:
+def feedback(
+    req: FeedbackRequest, scope: Annotated[TenantScope, Depends(current_scope)]
+) -> dict[str, Any]:
     scope.add_feedback(req.answer_id, req.rating, req.note)
     return {"answer_id": req.answer_id, "rating": req.rating}
 

@@ -76,7 +76,8 @@ def mark_succeeded(job_id: str) -> None:
 
 
 def _backoff_seconds(attempts: int) -> int:
-    return min(300, 2**attempts)
+    # int ** int is typed Any (a negative exponent gives a float), so pin it.
+    return int(min(300, 2**attempts))
 
 
 def mark_failed(job_id: str, error: str, backoff_seconds: int | None = None) -> str:

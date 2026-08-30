@@ -55,8 +55,8 @@ ignore = [
 # stubs use 3.12 type statements).
 files = ["knowledge_desk"]
 ignore_missing_imports = true
-# Pragmatic settings: this codebase was not written mypy-first, so the goal is
-# catching real mistakes (bad attribute, wrong arity) rather than full coverage.
-check_untyped_defs = true
-warn_redundant_casts = true
-warn_unused_ignores = true
+# The pragmatic settings this replaced were meant as a stepping stone, and the
+# remaining distance turned out to be 33 errors across 9 files: bare `dict`
+# handler returns, four unannotated functions, and count(*) coming back as Any.
+# All fixed, so the loose settings had outlived their reason.
+strict = true

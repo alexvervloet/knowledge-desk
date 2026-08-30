@@ -131,7 +131,7 @@ reads the result. Here the reader is a model, and "it will respect the fence" is
 a strong empirical tendency, not a theorem.
 
 Streaming. The answer arrives token by token. The API turns each token event into
-a Server Sent Events frame, in [main.py:323-346](../../../knowledge_desk/main.py#L323-L346 "ask"),
+a Server Sent Events frame, in [main.py:328-353](../../../knowledge_desk/main.py#L328-L353 "ask"),
 which is a long-lived HTTP response where the server writes `data: ...` lines as
 they become available. The browser reads them as they arrive. The reason to
 bother is entirely perceived latency: a four second wait with text appearing

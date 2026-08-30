@@ -82,7 +82,7 @@ buffered 400MB is not protecting the thing you thought it was.
 
 There is a fourth one worth studying for the concurrency lesson. The storage
 quota is checked inside the same transaction that does the write, at
-[tenancy.py:224-251](../../../knowledge_desk/tenancy.py#L224-L251), passed in as a
+[tenancy.py:225-251](../../../knowledge_desk/tenancy.py#L225-L251), passed in as a
 `precheck` callback that `sync_documents` runs before writing anything. If you
 checked the quota in one transaction and wrote in another, two concurrent uploads
 both measure "we are under quota", and both write. Classic time-of-check to

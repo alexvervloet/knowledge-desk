@@ -171,12 +171,15 @@ class TenantScope:
     # --- members ----------------------------------------------------------
 
     def _owner_count(self, conn: psycopg.Connection[DictRow]) -> int:
-        return require_row(
-            conn.execute(
-                "select count(*) as n from memberships where org_id = %s and role = 'owner'",
-                (self.org_id,),
-            ).fetchone()
-        )["n"]
+        # A DictRow value is typed Any; a count(*) is an int.
+        return int(
+            require_row(
+                conn.execute(
+                    "select count(*) as n from memberships where org_id = %s and role = 'owner'",
+                    (self.org_id,),
+                ).fetchone()
+            )["n"]
+        )
 
     def set_member_role(self, user_id: str, role: str) -> None:
         """Change a member's role. You cannot change your own role (avoids
@@ -263,12 +266,15 @@ class TenantScope:
         query rather than a window function over the page, because the page is
         capped and the client needs the count of everything, not of the page."""
         with connect(self.org_id) as conn:
-            return require_row(
-                conn.execute(
-                    "select count(*) as n from documents where org_id = %s",
-                    (self.org_id,),
-                ).fetchone()
-            )["n"]
+            # A DictRow value is typed Any; a count(*) is an int.
+            return int(
+                require_row(
+                    conn.execute(
+                        "select count(*) as n from documents where org_id = %s",
+                        (self.org_id,),
+                    ).fetchone()
+                )["n"]
+            )
 
     def list_documents(self, limit: int = 100, offset: int = 0) -> list[dict[str, Any]]:
         # Open to every member on purpose: seeing which documents the org holds
@@ -518,12 +524,15 @@ class TenantScope:
     def count_audit(self) -> int:
         self.require_role("admin")
         with connect(self.org_id) as conn:
-            return require_row(
-                conn.execute(
-                    "select count(*) as n from audit_log where org_id = %s",
-                    (self.org_id,),
-                ).fetchone()
-            )["n"]
+            # A DictRow value is typed Any; a count(*) is an int.
+            return int(
+                require_row(
+                    conn.execute(
+                        "select count(*) as n from audit_log where org_id = %s",
+                        (self.org_id,),
+                    ).fetchone()
+                )["n"]
+            )
 
     def list_audit(self, limit: int = 100, offset: int = 0) -> list[dict[str, Any]]:
         """Recent audit events for this org. Admin only."""
@@ -591,12 +600,15 @@ class TenantScope:
 
     def count_members(self) -> int:
         with connect(self.org_id) as conn:
-            return require_row(
-                conn.execute(
-                    "select count(*) as n from memberships where org_id = %s",
-                    (self.org_id,),
-                ).fetchone()
-            )["n"]
+            # A DictRow value is typed Any; a count(*) is an int.
+            return int(
+                require_row(
+                    conn.execute(
+                        "select count(*) as n from memberships where org_id = %s",
+                        (self.org_id,),
+                    ).fetchone()
+                )["n"]
+            )
 
     def list_members(self, limit: int = 100, offset: int = 0) -> list[dict[str, Any]]:
         with connect(self.org_id) as conn:

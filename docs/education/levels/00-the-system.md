@@ -57,7 +57,7 @@ each with a `text` column and an `embedding` column, where the embedding is a
 1,024-dimensional float vector stored in Postgres by the pgvector extension.
 Retrieval is a nearest-neighbour query under cosine distance, written in SQL with
 the `<=>` operator, in
-[tenancy.py:391-412](../../../knowledge_desk/tenancy.py#L391-L412 "TenantScope.search").
+[tenancy.py:397-418](../../../knowledge_desk/tenancy.py#L397-L418 "TenantScope.search").
 
 You already know what makes that expensive. Exact nearest neighbour over N rows
 is O(N) distance computations per query, and each one touches 1,024 floats. So

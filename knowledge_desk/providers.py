@@ -367,7 +367,7 @@ class ClaudeAnswerProvider:
         }
 
 
-def get_answer_provider():
+def get_answer_provider() -> ClaudeAnswerProvider | MockAnswerProvider:
     """Claude when an Anthropic key is present, otherwise the loud mock."""
     if settings.anthropic_api_key:
         return ClaudeAnswerProvider()
