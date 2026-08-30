@@ -32,8 +32,10 @@ ROOT = Path(__file__).resolve().parent
 
 
 def tracked_markdown() -> list[Path]:
-    out = subprocess.run(
-        ["git", "ls-files", "*.md"],
+    # S603/S607: a fixed argv with no shell and no caller input. Resolving
+    # git to an absolute path would only hard-code one machine's layout.
+    out = subprocess.run(  # noqa: S603
+        ["git", "ls-files", "*.md"],  # noqa: S607
         cwd=ROOT,
         capture_output=True,
         text=True,

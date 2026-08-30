@@ -35,6 +35,7 @@ select = [
     "B",        # bugbear
     "SIM",      # simplify
     "C4",       # comprehensions
+    "S",        # flake8-bandit: the static half of a security review
 ]
 ignore = [
     "E501",  # line length is formatter's job, and SQL strings read better long
@@ -43,8 +44,10 @@ ignore = [
 
 [tool.ruff.lint.per-file-ignores]
 # Tests and evals reach into private helpers on purpose to assert on internals.
-"tests/*" = ["E402"]
-"evals/*" = ["E402"]
+# S101 is the whole point of a test file, and S105/S106 fire on every fixture
+# password; both are noise here and would drown the findings that matter.
+"tests/*" = ["E402", "S101", "S105", "S106", "S107"]
+"evals/*" = ["E402", "S101", "S105", "S106", "S107"]
 
 [tool.mypy]
 # No python_version pin: it must match the interpreter in use, because a lower

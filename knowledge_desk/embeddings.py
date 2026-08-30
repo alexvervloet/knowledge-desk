@@ -37,7 +37,9 @@ class MockEmbedder:
         if EMBED_FAIL_MARKER in text:
             raise ValueError("embedding provider rejected this input")
         seed = int.from_bytes(hashlib.sha256(text.encode("utf-8")).digest()[:8], "big")
-        rng = random.Random(seed)
+        # S311: the same text must yield the same vector, so the generator
+        # is seeded from its sha256. Deterministic by design, not crypto.
+        rng = random.Random(seed)  # noqa: S311
         return _unit([rng.uniform(-1.0, 1.0) for _ in range(self.dim)])
 
     def embed_documents(self, texts: list[str]) -> list[list[float]]:

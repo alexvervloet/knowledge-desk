@@ -32,12 +32,14 @@ _ALL_TABLES = (
 )
 
 
+# S311 throughout: these draws make repeatable benchmark fixtures. Nothing
+# here is a secret, and a seeded generator is exactly what is wanted.
 def _rand_vec(rng: random.Random) -> list[float]:
     return [rng.uniform(-1.0, 1.0) for _ in range(EMBED_DIM)]
 
 
 def _seed(chunks: int, with_index: bool = False, seed: int = 7) -> tuple[str, str]:
-    rng = random.Random(seed)
+    rng = random.Random(seed)  # noqa: S311
     with psycopg.connect(settings.database_url) as conn:
         conn.execute(f"truncate {_ALL_TABLES} cascade")
         conn.commit()
@@ -141,7 +143,7 @@ def _main() -> int:
 
     ctx = accounts.authenticate("o@bench.test", "pw-supersecret", "bench")
     scope = TenantScope(ctx)
-    rng = random.Random(11)
+    rng = random.Random(11)  # noqa: S311
 
     with connect(org_id) as conn:
         n = require_row(conn.execute("select count(*) as n from chunks").fetchone())["n"]

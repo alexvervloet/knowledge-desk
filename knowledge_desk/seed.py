@@ -15,7 +15,8 @@ from typing import Any
 from knowledge_desk import accounts, ingest
 from knowledge_desk.db import close_pool, connect
 
-DEMO_PASSWORD = "demo-password-123"
+# S105: the demo login for a throwaway local dataset, not a real credential.
+DEMO_PASSWORD = "demo-password-123"  # noqa: S105
 
 _ORGS: list[dict[str, Any]] = [
     {
