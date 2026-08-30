@@ -65,6 +65,11 @@ jobs:
         run: mypy
       - name: Docs links
         run: python check_links.py
+      - name: Docs anchors
+        # check_links.py resolves targets; this resolves the line ranges inside
+        # them against the symbols they name. Without it a docstring edit
+        # silently repoints a reference and CI stays green.
+        run: python scripts/anchors.py
       - name: Audit Python dependencies
         # Advisory: a new CVE in a pinned dep should be visible without blocking
         # unrelated work. Promote to a hard gate once the noise level is known.
