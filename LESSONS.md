@@ -755,3 +755,78 @@ Takeaway: writing down a weakness is not triage. If a critique section names
 something worth fixing, it needs a line in an issue tracker or a failing test
 with a skip marker, something that is a debt rather than a paragraph. Otherwise
 the honesty of documenting it is the exact thing that buries it.
+
+## 37. `or` cannot tell "unset" from "empty", and a permission default is where that matters
+
+Ingestion read a document's ACL as `item.get("acl") or DEFAULT_ACL`. It is the
+ordinary Python idiom for "use the default when nothing was supplied", and it is
+wrong the moment the empty value is itself a meaningful answer. An upload sending
+`"acl": []` means nobody. `[] or DEFAULT_ACL` is `["public-to-org"]`, so the
+request asking for the tightest permission the system offers received the
+loosest one available.
+
+The shape is worth more than the instance. `or` collapses every falsy value onto
+the default: `0`, `""`, `[]`, `False`. Most of the time the collapse is harmless
+because the falsy value and "unspecified" really do mean the same thing. In a
+permission system they never do, because "deny everyone" and "I did not say" are
+opposite instructions and one of them is the one you must not guess at.
+
+Nothing caught it for months. The retrieval tests all pass an ACL explicitly, so
+the branch that fires on an empty one was never taken, and its failure mode is
+silent: the document ingests, appears in listings, and is retrievable, which is
+exactly what a working upload looks like.
+
+Takeaway: `x or default` is a bug wherever the empty value is a valid choice.
+Write `default if x is None else x` and let the reader see that the distinction
+was considered. And when a default decides who can read something, test the empty
+case specifically, because the failure is invisible from every other angle.
+
+## 38. Matching on folded text means replacing on the original
+
+Marker defusing was matching raw bytes, so `DОCUMENT` with a Cyrillic О walked
+past it while reading identically to the model. The fix is folding: normalise
+lookalikes and strip invisibles before the pattern runs.
+
+The obvious implementation folds, matches, replaces, and returns the folded
+string. It is four lines and it is wrong, because the folded string is not the
+document. Hand that to the model and every homoglyph in a legitimate document has
+been silently rewritten; hand it to an incident review and the first question,
+what did the document actually say, has been answered by destroying the evidence.
+
+So `fold` returns the folded text plus, for each folded character, the index it
+came from. A span found in folded coordinates maps back to a span in the
+original, and the replacement lands on the original bytes. That constraint is
+also what ruled out NFKC: full compatibility normalisation changes lengths in
+ways that make an exact map fiddly, so the folding here is only deletions and
+one-for-one substitutions, which keeps the map exact and the module short enough
+to audit.
+
+Takeaway: a normalisation used for *matching* and a normalisation used for
+*storage* are different operations, and conflating them quietly rewrites user
+data. If you fold to compare, keep the way back.
+
+## 39. Naming a layer honestly changed what it was for
+
+The output checks were going to be a gate. Then the streaming: tokens go to the
+browser as they arrive, so by the time an answer is complete the reader has
+finished it, and there is nothing left to withhold. Gating means buffering the
+whole answer and giving up the streaming, which is a real product trade rather
+than a detail.
+
+The temptation was to ship it anyway and call it an output check, because that is
+the name the literature uses and the module would have looked the same. Writing
+"detector, not a gate" in the docstring instead changed three decisions
+downstream: the findings go into the `done` frame rather than replacing the
+answer, they are audited so a pattern across many answers is visible where one
+flagged answer is not, and the UI banner says the checks flagged an answer the
+reader has already read rather than implying something was blocked.
+
+The related honesty is what the layer does not do. A markdown image has a
+structural handle and is caught. A plain URL in a sentence has none, and catching
+it needs domain reputation rather than a regex. There is now a test asserting the
+bare URL is *not* flagged, which turns the omission into a decision on the record
+rather than something a later reader has to guess was deliberate.
+
+Takeaway: name a control by what it actually does, early, because the name drives
+the design. A "gate" that cannot block would have produced a worse module and a
+more confident one.
