@@ -887,3 +887,25 @@ stands, and the next reader takes it as considered and therefore settled. The
 code into something CI can falsify, and the shape generalises: if a document
 asserts something about the code, find the assertion a machine can check and
 write that down next to the prose.
+
+## 43. The formatter has to run before the anchor repair, not after
+
+Enabling `ruff format` reflowed 33 files, which moved every line range the
+education docs point at. That much was expected: `scripts/anchors.py --fix`
+exists for exactly this and repointed all 15 drifted anchors in one pass.
+
+What was not expected is that the ordering matters within a single change. Later,
+tightening mypy added a return annotation to `main.py`'s `ask`, and I ran the
+anchor repair before the formatter. The formatter then reflowed the signature I
+had just annotated, `ask` grew from 24 lines to 26, and the anchors I had just
+repaired were stale again. Two files needed a second repair pass.
+
+The dependency is one-way. The formatter changes line numbers; the anchor
+checker reads them. So the order is always format, then repair, then verify, and
+a verify that comes back clean only means something if nothing has touched a
+`.py` file since the format ran.
+
+Takeaway: `anchors.py` is downstream of anything that edits Python. Any workflow
+that runs it needs to run it last. The reason CI never caught this ordering is
+that CI only ever sees the settled state, where both checks pass. The trap only
+exists mid-edit, which is where a plan has to encode it.
