@@ -22,6 +22,20 @@ markers = [
     "eval: merge-gating evals (permission leak, grounded answer)",
 ]
 
+[tool.coverage.run]
+source = ["knowledge_desk"]
+# bench.py is a developer benchmarking harness, not shipped behaviour. Counting
+# its 92 statements against the total only invites tests written for the metric.
+omit = ["knowledge_desk/bench.py"]
+
+[tool.coverage.report]
+# The measured figure is 88%. The floor sits below it on purpose: CI runs 3.14
+# and local runs 3.13, and the gate is here to catch a real regression rather
+# than to argue about a point of drift. Raise it as the thin modules get tests:
+# worker.py is at 0%, tracing.py and migrate.py at 73% and 70%.
+fail_under = 85
+show_missing = true
+
 [tool.ruff]
 line-length = 100
 target-version = "py311"

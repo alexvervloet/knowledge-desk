@@ -41,7 +41,8 @@ jobs:
         run: python -m knowledge_desk.migrate
 
       - name: Tests
-        run: python -m pytest -q
+        # --cov turns on the coverage floor configured in pyproject.
+        run: python -m pytest -q --cov
 
       - name: Eval gate (permission leak + grounded answer)
         run: python -m evals.run
