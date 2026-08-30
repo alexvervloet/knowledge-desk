@@ -12,6 +12,46 @@ do, not merely a change to security-adjacent code.
 The migration files carry phase numbers in their comments as a record of when
 each was written. The sections below name which phases those were.
 
+## 2026-08-30 — Citation evidence, and anchors that resolve to symbols
+
+The last open security item, plus the tooling for a docs problem that had cost
+three manual repair passes.
+
+### Security
+
+- Pin each cited claim to a quote from the passage it cites. Citation existence
+  was checked and citation honesty was not: a model that reads a forged policy
+  can attribute it to the real key of the passage that carried it, so the key
+  check passes and the false claim reads as sourced. The system prompt now asks
+  for a short verbatim quote after each `[n]`, and `check_answer` verifies the
+  quote appears in that passage, comparing on whitespace-collapsed, case-folded
+  text so line wrapping is not a false positive.
+- A citation carrying no quote is reported as well. Without it, a model that
+  quietly stops quoting disables the check and every finding keeps reading green.
+
+This detects detached, invented, and stale citations. It does not prove
+entailment, and `outputchecks.py` says so: a quote can be real, in the right
+passage, and still not support the sentence built around it.
+
+### Added
+
+- `scripts/anchors.py`. `check_links.py` resolves link targets, so a line anchor
+  passes whether or not it still points at the right code. A markdown link title
+  now records which symbol a range means, resolved with `ast`, and CI gates on
+  it. `--fix` repoints a moved symbol, `--tidy` pulls boundaries off blank lines,
+  `--adopt` records a symbol where a range already matches one exactly.
+
+### Fixed
+
+- Nine stale doc ranges no previous check could see, `_SYSTEM` worst among them:
+  the citation-evidence edit grew it past its anchor, leaving three documents
+  pointing at a prompt cut off mid-string.
+
+### Changed
+
+- The mock provider quotes its cited passage, so the keyless path exercises the
+  answer shape the output checks verify.
+
 ## 2026-08-30 — Grammar defusing, folding, and output checks
 
 The four gaps the previous two entries named and left open, closed. Same sources:
