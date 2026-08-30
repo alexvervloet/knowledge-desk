@@ -61,6 +61,8 @@ jobs:
           pip install ruff==0.8.4 mypy==1.14.0 pip-audit==2.7.3
       - name: Ruff
         run: ruff check .
+      - name: Ruff format
+        run: ruff format --check .
       - name: Mypy
         run: mypy
       - name: Docs links
