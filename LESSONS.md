@@ -695,3 +695,63 @@ Takeaway: write the strict policy first, then find out what it breaks, and make
 each concession individually with a reason attached. `style-src 'unsafe-inline'`
 and `script-src 'self'` is a real, defensible position; "CSP" as a checkbox,
 loosened until the page renders, is not.
+
+## 35. The eval gate could not see its own boundary being deleted
+
+The fence around retrieved passages was rebuilt to carry a per-request nonce,
+which is the control that actually makes it a boundary: an attacker writes their
+document today and it is retrieved next week, so the one thing they cannot put in
+it is a value that did not exist yet. A fixed delimiter is one they can simply
+type.
+
+Then, before committing, the obvious check. Revert `fence_tags` to return the old
+fixed strings and see the gate go red.
+
+It did not. All five evals passed. The marker-count assertions ask whether the
+prompt contains exactly one pair per passage, and that stayed true, because the
+*other* layer, the regex that defuses marker-shaped text, kept defusing the
+payload exactly as before. The counts are a symptom that two independent layers
+both produce. Delete either one and the other still produces it.
+
+So the boundary was deletable, silently, by a gate written specifically to
+prevent that. The fix is one line, an assertion that two nonces produce two
+different markers, and the interesting part is that no amount of care in writing
+the *payloads* would have found it. The payload catalogue was fine. The property
+being asserted was one level too low.
+
+There is a matching half. Deleting the regex instead fails nothing in the eval
+gate and seven unit tests, and that is correct rather than a second bug: the
+regex defends against a model honouring a marker that is merely close enough,
+which no marker count can observe. Two layers, two properties, two different
+places they are checked. Worth knowing which is which before assuming a green
+gate means a layer is load-bearing.
+
+Takeaway: after adding a security layer, delete it and watch the gate. If nothing
+goes red, the gate is asserting a symptom rather than the property, and you have
+learned that before an attacker does. This is exercise 3's lesson, which this
+repository has taught since Phase 6, arriving as a live bug in the eval written
+to enforce it. Knowing the failure mode by name is not the same as noticing it.
+
+## 36. The critique section had already called both fixes
+
+Both changes in this pass, the per-request nonce and moving the document path
+inside the fence, were already written down in
+`docs/education/levels/03-the-model-call.md`, under "where I think the defense is
+thinner than it reads". One says randomising the delimiter per request "costs
+nothing and removes the entire class of forgery rather than a specific string
+match. I would take that change." The other describes the unescaped path on the
+citation line and ends "Worth a look."
+
+They sat there through a security review that rediscovered both from the code.
+
+The observation is not that the review was wasted, since it produced the fixes
+and three findings the docs had not named. It is that a known weakness recorded
+in prose, in a document whose job is teaching rather than tracking, is
+indistinguishable from a weakness nobody has noticed. Nothing links it to the
+code, nothing fails while it stands, and the next reader takes it as considered
+and therefore settled.
+
+Takeaway: writing down a weakness is not triage. If a critique section names
+something worth fixing, it needs a line in an issue tracker or a failing test
+with a skip marker, something that is a debt rather than a paragraph. Otherwise
+the honesty of documenting it is the exact thing that buries it.
