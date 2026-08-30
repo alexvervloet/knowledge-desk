@@ -12,13 +12,14 @@ export function Ask() {
   const [error, setError] = useState("");
   const [streaming, setStreaming] = useState(false);
   const [feedback, setFeedback] = useState<"up" | "down" | "">("");
+  const [warnings, setWarnings] = useState<{ code: string; detail: string }[]>([]);
   const abortRef = useRef<AbortController | null>(null);
 
   async function ask(e: FormEvent) {
     e.preventDefault();
     if (!question.trim()) return;
     setAnswer(""); setSources([]); setProvider(""); setAnswerId("");
-    setError(""); setFeedback(""); setStreaming(true);
+    setError(""); setFeedback(""); setWarnings([]); setStreaming(true);
     const ctrl = new AbortController();
     abortRef.current = ctrl;
     try {
@@ -26,6 +27,7 @@ export function Ask() {
         if (ev.type === "meta") { setProvider(ev.provider); setAnswerId(ev.answer_id); }
         else if (ev.type === "sources") setSources(ev.sources);
         else if (ev.type === "token") setAnswer((a) => a + ev.text);
+        else if (ev.type === "done") setWarnings(ev.warnings ?? []);
         else if (ev.type === "error") setError(ev.message);
       }, ctrl.signal);
     } catch (err) {
@@ -72,6 +74,19 @@ export function Ask() {
       {(answer || sources.length > 0) && (
         <div className="card">
           <p className="answer">{answer}</p>
+          {warnings.length > 0 && (
+            // Shown after the fact on purpose. The answer streamed, so this is
+            // not a gate that held something back; it is the reader being told
+            // what the checks noticed about what they have already read.
+            <div className="banner">
+              <strong>Checks flagged this answer</strong>
+              <ul>
+                {warnings.map((w) => (
+                  <li key={w.code}><code>{w.code}</code> — {w.detail}</li>
+                ))}
+              </ul>
+            </div>
+          )}
           {sources.length > 0 && (
             <div className="sources">
               <strong>Sources</strong>

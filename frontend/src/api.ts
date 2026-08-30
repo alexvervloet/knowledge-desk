@@ -99,7 +99,14 @@ export type AskEvent =
   | { type: "meta"; answer_id: string; provider: string }
   | { type: "sources"; sources: { document_id: string; ordinal: number; path: string }[] }
   | { type: "token"; text: string }
-  | { type: "done"; usage: { input_tokens: number; output_tokens: number }; cost_usd: number }
+  | {
+      type: "done";
+      usage: { input_tokens: number; output_tokens: number };
+      cost_usd: number;
+      // Deterministic checks on the finished answer. Detectors, not a gate: the
+      // tokens have already streamed by the time these arrive.
+      warnings?: { code: string; detail: string }[];
+    }
   | { type: "error"; message: string };
 
 export async function askStream(

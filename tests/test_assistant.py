@@ -196,3 +196,44 @@ def test_feedback_on_foreign_answer_is_404():
     # Org A cannot leave feedback on org B's answer.
     resp = client.post("/feedback", headers=auth(a), json={"answer_id": b_answer, "rating": "up"})
     assert resp.status_code == 404
+
+
+def test_done_frame_carries_output_check_warnings():
+    """The checks run on the finished answer and ride out in the done frame. The
+    mock provider always cites [1], so a single retrieved passage keeps it in
+    range; the flagged case needs an answer the checks object to."""
+    token = signup("acme", "owner@acme.test")
+    upload(token, [{"path": "policy.txt", "content": "refunds take five days"}])
+    events = ask(token, "how long do refunds take")
+    done = next(e for e in events if e["type"] == "done")
+    assert done["warnings"] == []
+
+
+def test_a_flagged_answer_is_recorded_in_the_audit_log(monkeypatch):
+    """A single flagged answer is noise. The point of writing it down is that a
+    pattern across many of them is not, and nothing else here would show it."""
+    from knowledge_desk import providers
+
+    class Hijacked:
+        name = "mock"
+
+        def estimate(self, question, contexts, answer):
+            return {"input_tokens": 1, "output_tokens": 1, "cost_usd": 0.0}
+
+        def stream(self, question, contexts):
+            yield {"type": "token", "text": "See [9] and <<<UNTRUSTED_DOCUMENT 00>>>."}
+            yield {"type": "usage", "input_tokens": 1, "output_tokens": 1,
+                   "cost_usd": 0.0}
+
+    monkeypatch.setattr(providers, "get_answer_provider", lambda: Hijacked())
+    monkeypatch.setattr("knowledge_desk.assistant.get_answer_provider", lambda: Hijacked())
+
+    token = signup("acme", "owner@acme.test")
+    upload(token, [{"path": "policy.txt", "content": "refunds take five days"}])
+    done = next(e for e in ask(token, "refunds") if e["type"] == "done")
+
+    codes = {w["code"] for w in done["warnings"]}
+    assert codes == {"citation_out_of_range", "fence_echoed"}
+
+    actions = [r["action"] for r in client.get("/audit", headers=auth(token)).json()]
+    assert "answer.flagged" in actions

@@ -7,7 +7,7 @@ enforced in retrieval carries all the way through to the generated answer.
   {"type": "meta", "answer_id": ..., "provider": ...}
   {"type": "sources", "sources": [{document_id, ordinal, path}]}
   {"type": "token", "text": ...}          zero or more
-  {"type": "done", "usage": {...}, "cost_usd": float}
+  {"type": "done", "usage": {...}, "cost_usd": float, "warnings": [...]}
   {"type": "error", "message": ...}       on failure, instead of done
 """
 
@@ -18,7 +18,7 @@ import secrets
 from collections.abc import Generator
 from typing import Any
 
-from knowledge_desk import audit, retrieval
+from knowledge_desk import audit, outputchecks, retrieval
 from knowledge_desk.config import settings
 from knowledge_desk.providers import count_defused, get_answer_provider
 from knowledge_desk.tenancy import TenantScope
@@ -102,7 +102,7 @@ def answer_stream(
                 tracer.token(word + " ")
                 yield {"type": "token", "text": word + " "}
             yield {"type": "done", "usage": {"input_tokens": 0, "output_tokens": 0},
-                   "cost_usd": 0.0}
+                   "cost_usd": 0.0, "warnings": []}
             return
 
         sources = [
@@ -120,11 +120,22 @@ def answer_stream(
                 billed = True
                 tracer.done(event["input_tokens"], event["output_tokens"],
                             event["cost_usd"])
+                # The usage frame is last, so the answer is complete here. These
+                # are detectors rather than a gate: the caller has already read
+                # the tokens. They ride out in the done frame for the UI and land
+                # in the audit log, where a pattern across answers is visible in
+                # a way one flagged answer is not.
+                warnings = outputchecks.check_answer("".join(streamed), contexts)
+                if warnings:
+                    audit.log(scope.org_id, scope.ctx.user_id, "answer.flagged",
+                              {"answer_id": answer_id,
+                               "codes": ",".join(w["code"] for w in warnings)})
                 yield {
                     "type": "done",
                     "usage": {"input_tokens": event["input_tokens"],
                               "output_tokens": event["output_tokens"]},
                     "cost_usd": event["cost_usd"],
+                    "warnings": warnings,
                 }
             else:
                 streamed.append(event["text"])
