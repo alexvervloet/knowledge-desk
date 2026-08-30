@@ -32,12 +32,15 @@ def auth(token: str) -> dict:
 
 
 def add_member(owner: str, email: str, role: str = "member") -> str:
-    return client.post("/members", headers=auth(owner),
-                       json={"email": email, "password": PW, "role": role}).json()["user_id"]
+    return client.post(
+        "/members", headers=auth(owner), json={"email": email, "password": PW, "role": role}
+    ).json()["user_id"]
 
 
 def login(email: str, slug: str) -> str:
-    return client.post("/auth/login", json={"email": email, "password": PW, "org_slug": slug}).json()["token"]
+    return client.post(
+        "/auth/login", json={"email": email, "password": PW, "org_slug": slug}
+    ).json()["token"]
 
 
 def me_id(token: str) -> str:
@@ -50,14 +53,22 @@ def me_id(token: str) -> str:
 def test_change_member_role():
     owner = signup("acme", "o@acme.test")
     uid = add_member(owner, "dev@acme.test")
-    assert client.patch(f"/members/{uid}", headers=auth(owner), json={"role": "admin"}).status_code == 200
+    assert (
+        client.patch(f"/members/{uid}", headers=auth(owner), json={"role": "admin"}).status_code
+        == 200
+    )
     roles = {m["email"]: m["role"] for m in client.get("/members", headers=auth(owner)).json()}
     assert roles["dev@acme.test"] == "admin"
 
 
 def test_cannot_change_own_role():
     owner = signup("acme", "o@acme.test")
-    assert client.patch(f"/members/{me_id(owner)}", headers=auth(owner), json={"role": "member"}).status_code == 403
+    assert (
+        client.patch(
+            f"/members/{me_id(owner)}", headers=auth(owner), json={"role": "member"}
+        ).status_code
+        == 403
+    )
 
 
 def test_cannot_demote_last_owner():
@@ -65,14 +76,21 @@ def test_cannot_demote_last_owner():
     add_member(owner, "adm@acme.test", "admin")
     admin = login("adm@acme.test", "acme")
     # An admin tries to demote the sole owner: refused to keep an owner in the org.
-    assert client.patch(f"/members/{me_id(owner)}", headers=auth(admin), json={"role": "member"}).status_code == 403
+    assert (
+        client.patch(
+            f"/members/{me_id(owner)}", headers=auth(admin), json={"role": "member"}
+        ).status_code
+        == 403
+    )
 
 
 def test_remove_member():
     owner = signup("acme", "o@acme.test")
     uid = add_member(owner, "dev@acme.test")
     assert client.delete(f"/members/{uid}", headers=auth(owner)).status_code == 204
-    assert "dev@acme.test" not in {m["email"] for m in client.get("/members", headers=auth(owner)).json()}
+    assert "dev@acme.test" not in {
+        m["email"] for m in client.get("/members", headers=auth(owner)).json()
+    }
 
 
 def test_cannot_remove_self_or_last_owner():
@@ -84,7 +102,10 @@ def test_member_cannot_administer():
     owner = signup("acme", "o@acme.test")
     uid = add_member(owner, "dev@acme.test")
     member = login("dev@acme.test", "acme")
-    assert client.patch(f"/members/{uid}", headers=auth(member), json={"role": "admin"}).status_code == 403
+    assert (
+        client.patch(f"/members/{uid}", headers=auth(member), json={"role": "admin"}).status_code
+        == 403
+    )
 
 
 # --- the role-grant ceiling ------------------------------------------------
@@ -98,13 +119,18 @@ def test_admin_cannot_create_an_owner():
     owner = signup("acme", "o@acme.test")
     add_member(owner, "adm@acme.test", "admin")
     admin = login("adm@acme.test", "acme")
-    resp = client.post("/members", headers=auth(admin),
-                       json={"email": "puppet@acme.test", "password": PW, "role": "owner"})
+    resp = client.post(
+        "/members",
+        headers=auth(admin),
+        json={"email": "puppet@acme.test", "password": PW, "role": "owner"},
+    )
     assert resp.status_code == 403
     assert "cannot grant role owner" in resp.json()["detail"]
     # And the account does not exist, so it cannot be logged into.
-    assert client.post("/auth/login",
-                       json={"email": "puppet@acme.test", "password": PW}).status_code == 401
+    assert (
+        client.post("/auth/login", json={"email": "puppet@acme.test", "password": PW}).status_code
+        == 401
+    )
 
 
 def test_admin_cannot_promote_anyone_to_owner():
@@ -112,8 +138,10 @@ def test_admin_cannot_promote_anyone_to_owner():
     add_member(owner, "adm@acme.test", "admin")
     uid = add_member(owner, "dev@acme.test")
     admin = login("adm@acme.test", "acme")
-    assert client.patch(f"/members/{uid}", headers=auth(admin),
-                        json={"role": "owner"}).status_code == 403
+    assert (
+        client.patch(f"/members/{uid}", headers=auth(admin), json={"role": "owner"}).status_code
+        == 403
+    )
     roles = {m["email"]: m["role"] for m in client.get("/members", headers=auth(owner)).json()}
     assert roles["dev@acme.test"] == "member"
 
@@ -122,24 +150,37 @@ def test_admin_can_still_grant_up_to_its_own_rank():
     owner = signup("acme", "o@acme.test")
     add_member(owner, "adm@acme.test", "admin")
     admin = login("adm@acme.test", "acme")
-    assert client.post("/members", headers=auth(admin),
-                       json={"email": "a@acme.test", "password": PW,
-                             "role": "admin"}).status_code == 201
-    uid = client.post("/members", headers=auth(admin),
-                      json={"email": "b@acme.test", "password": PW,
-                            "role": "member"}).json()["user_id"]
-    assert client.patch(f"/members/{uid}", headers=auth(admin),
-                        json={"role": "admin"}).status_code == 200
+    assert (
+        client.post(
+            "/members",
+            headers=auth(admin),
+            json={"email": "a@acme.test", "password": PW, "role": "admin"},
+        ).status_code
+        == 201
+    )
+    uid = client.post(
+        "/members",
+        headers=auth(admin),
+        json={"email": "b@acme.test", "password": PW, "role": "member"},
+    ).json()["user_id"]
+    assert (
+        client.patch(f"/members/{uid}", headers=auth(admin), json={"role": "admin"}).status_code
+        == 200
+    )
 
 
 def test_owner_can_still_grant_ownership():
     owner = signup("acme", "o@acme.test")
     uid = add_member(owner, "co@acme.test", "owner")
-    assert client.patch(f"/members/{uid}", headers=auth(owner),
-                        json={"role": "member"}).status_code == 200
+    assert (
+        client.patch(f"/members/{uid}", headers=auth(owner), json={"role": "member"}).status_code
+        == 200
+    )
     co = add_member(owner, "co2@acme.test")
-    assert client.patch(f"/members/{co}", headers=auth(owner),
-                        json={"role": "owner"}).status_code == 200
+    assert (
+        client.patch(f"/members/{co}", headers=auth(owner), json={"role": "owner"}).status_code
+        == 200
+    )
 
 
 # --- where authorization lives ---------------------------------------------
@@ -159,7 +200,9 @@ ADMIN_ONLY_SCOPE_CALLS = [
 ]
 
 
-@pytest.mark.parametrize("name,call", ADMIN_ONLY_SCOPE_CALLS, ids=[n for n, _ in ADMIN_ONLY_SCOPE_CALLS])
+@pytest.mark.parametrize(
+    "name,call", ADMIN_ONLY_SCOPE_CALLS, ids=[n for n, _ in ADMIN_ONLY_SCOPE_CALLS]
+)
 def test_admin_only_operations_are_gated_in_the_data_layer(name, call):
     """Role checks used to be split between the route layer and the data layer,
     with no rule saying which lived where, so reading main.py gave a wrong
@@ -180,9 +223,11 @@ def test_document_listing_is_open_to_members_on_purpose():
     is not the same as being able to read them: retrieval enforces the ACL per
     document, and the Sources tab is for everyone."""
     owner = signup("acme", "o@acme.test")
-    client.post("/sources/folder", headers=auth(owner),
-                json={"documents": [{"path": "a.txt", "content": "hello",
-                                     "acl": ["public-to-org"]}]})
+    client.post(
+        "/sources/folder",
+        headers=auth(owner),
+        json={"documents": [{"path": "a.txt", "content": "hello", "acl": ["public-to-org"]}]},
+    )
     ingest.run_pending()
     add_member(owner, "dev@acme.test")
     dev = login("dev@acme.test", "acme")
@@ -220,18 +265,33 @@ def test_edit_document_acl_changes_visibility():
     owner = signup("acme", "o@acme.test")
     x_id = add_member(owner, "x@acme.test")
     add_member(owner, "y@acme.test")
-    client.post("/sources/folder", headers=auth(owner),
-                json={"documents": [{"path": "d.txt", "content": "shared secret text", "acl": ["public-to-org"]}]})
+    client.post(
+        "/sources/folder",
+        headers=auth(owner),
+        json={
+            "documents": [
+                {"path": "d.txt", "content": "shared secret text", "acl": ["public-to-org"]}
+            ]
+        },
+    )
     ingest.run_pending()
     doc_id = client.get("/documents", headers=auth(owner)).json()[0]["id"]
 
     y = login("y@acme.test", "acme")
-    assert client.post("/search", headers=auth(y), json={"query": "shared secret text"}).json()  # visible now
+    assert client.post(
+        "/search", headers=auth(y), json={"query": "shared secret text"}
+    ).json()  # visible now
 
     # Restrict to user X; Y loses access, X keeps it.
-    assert client.patch(f"/documents/{doc_id}/acl", headers=auth(owner),
-                        json={"acl": [f"user:{x_id}"]}).status_code == 200
-    assert client.post("/search", headers=auth(y), json={"query": "shared secret text"}).json() == []
+    assert (
+        client.patch(
+            f"/documents/{doc_id}/acl", headers=auth(owner), json={"acl": [f"user:{x_id}"]}
+        ).status_code
+        == 200
+    )
+    assert (
+        client.post("/search", headers=auth(y), json={"query": "shared secret text"}).json() == []
+    )
     x = login("x@acme.test", "acme")
     assert client.post("/search", headers=auth(x), json={"query": "shared secret text"}).json()
 
@@ -241,8 +301,10 @@ def test_edit_document_acl_changes_visibility():
 
 def test_documents_paginate():
     owner = signup("acme", "o@acme.test")
-    docs = [{"path": f"doc{i:02d}.txt", "content": f"content {i}", "acl": ["public-to-org"]}
-            for i in range(5)]
+    docs = [
+        {"path": f"doc{i:02d}.txt", "content": f"content {i}", "acl": ["public-to-org"]}
+        for i in range(5)
+    ]
     client.post("/sources/folder", headers=auth(owner), json={"documents": docs})
     ingest.run_pending()
 
@@ -268,8 +330,10 @@ def test_pagination_reports_the_total_independent_of_the_page():
     """The client cannot build paging controls from a page alone, so the total
     rides along in a header. It must count everything, not the slice."""
     owner = signup("acme", "o@acme.test")
-    docs = [{"path": f"doc{i:02d}.txt", "content": f"content {i}", "acl": ["public-to-org"]}
-            for i in range(5)]
+    docs = [
+        {"path": f"doc{i:02d}.txt", "content": f"content {i}", "acl": ["public-to-org"]}
+        for i in range(5)
+    ]
     client.post("/sources/folder", headers=auth(owner), json={"documents": docs})
     ingest.run_pending()
 
@@ -289,8 +353,11 @@ def test_pagination_reports_the_total_independent_of_the_page():
 def test_total_count_is_org_scoped():
     a = signup("acme", "o@acme.test")
     b = signup("globex", "o@globex.test")
-    client.post("/sources/folder", headers=auth(a),
-                json={"documents": [{"path": "a.txt", "content": "x", "acl": ["public-to-org"]}]})
+    client.post(
+        "/sources/folder",
+        headers=auth(a),
+        json={"documents": [{"path": "a.txt", "content": "x", "acl": ["public-to-org"]}]},
+    )
     ingest.run_pending()
     assert client.get("/documents", headers=auth(a)).headers["X-Total-Count"] == "1"
     assert client.get("/documents", headers=auth(b)).headers["X-Total-Count"] == "0"

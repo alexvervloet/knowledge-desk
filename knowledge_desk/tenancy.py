@@ -66,8 +66,7 @@ class TenantScope:
     def list_groups(self) -> list[dict[str, Any]]:
         with connect(self.org_id) as conn:
             return conn.execute(
-                "select id, name, created_at from groups"
-                " where org_id = %s order by name",
+                "select id, name, created_at from groups" " where org_id = %s order by name",
                 (self.org_id,),
             ).fetchall()
 
@@ -75,11 +74,13 @@ class TenantScope:
         self.require_role("admin")
         try:
             with connect(self.org_id) as conn:
-                return require_row(conn.execute(
-                    "insert into groups(org_id, name) values (%s, %s)"
-                    " returning id, name, created_at",
-                    (self.org_id, name),
-                ).fetchone())
+                return require_row(
+                    conn.execute(
+                        "insert into groups(org_id, name) values (%s, %s)"
+                        " returning id, name, created_at",
+                        (self.org_id, name),
+                    ).fetchone()
+                )
         except psycopg.errors.UniqueViolation as exc:
             raise Conflict(f"group already exists: {name}") from exc
 
@@ -90,8 +91,7 @@ class TenantScope:
         """
         with connect(self.org_id) as conn:
             row = conn.execute(
-                "select id, name, created_at from groups"
-                " where id = %s and org_id = %s",
+                "select id, name, created_at from groups" " where id = %s and org_id = %s",
                 (group_id, self.org_id),
             ).fetchone()
         if row is None:
@@ -171,10 +171,12 @@ class TenantScope:
     # --- members ----------------------------------------------------------
 
     def _owner_count(self, conn: psycopg.Connection[DictRow]) -> int:
-        return require_row(conn.execute(
-            "select count(*) as n from memberships where org_id = %s and role = 'owner'",
-            (self.org_id,),
-        ).fetchone())["n"]
+        return require_row(
+            conn.execute(
+                "select count(*) as n from memberships where org_id = %s and role = 'owner'",
+                (self.org_id,),
+            ).fetchone()
+        )["n"]
 
     def set_member_role(self, user_id: str, role: str) -> None:
         """Change a member's role. You cannot change your own role (avoids
@@ -241,12 +243,14 @@ class TenantScope:
             is cheap here: uploads are rare and already slow.
             """
             conn.execute("select 1 from orgs where id = %s for update", (self.org_id,))
-            usage = require_row(conn.execute(
-                "select count(*) as docs,"
-                " coalesce(sum(octet_length(content)), 0) as bytes"
-                " from documents where org_id = %s and status <> 'deleted'",
-                (self.org_id,),
-            ).fetchone())
+            usage = require_row(
+                conn.execute(
+                    "select count(*) as docs,"
+                    " coalesce(sum(octet_length(content)), 0) as bytes"
+                    " from documents where org_id = %s and status <> 'deleted'",
+                    (self.org_id,),
+                ).fetchone()
+            )
             if int(usage["bytes"]) + incoming_bytes > settings.org_storage_bytes_cap:
                 raise QuotaExceeded("org storage cap exceeded")
             if int(usage["docs"]) + len(items) > settings.org_doc_cap:
@@ -259,10 +263,12 @@ class TenantScope:
         query rather than a window function over the page, because the page is
         capped and the client needs the count of everything, not of the page."""
         with connect(self.org_id) as conn:
-            return require_row(conn.execute(
-                "select count(*) as n from documents where org_id = %s",
-                (self.org_id,),
-            ).fetchone())["n"]
+            return require_row(
+                conn.execute(
+                    "select count(*) as n from documents where org_id = %s",
+                    (self.org_id,),
+                ).fetchone()
+            )["n"]
 
     def list_documents(self, limit: int = 100, offset: int = 0) -> list[dict[str, Any]]:
         # Open to every member on purpose: seeing which documents the org holds
@@ -324,9 +330,7 @@ class TenantScope:
     # so the number only trades round trips against peak memory.
     _SWEEP_PAGE = 500
 
-    def _sweep(
-        self, fetch: Callable[[int, int], list[dict[str, Any]]]
-    ) -> list[dict[str, Any]]:
+    def _sweep(self, fetch: Callable[[int, int], list[dict[str, Any]]]) -> list[dict[str, Any]]:
         """Collect every row of a paginated listing.
 
         export() used to call the list methods with no arguments and inherit
@@ -368,16 +372,20 @@ class TenantScope:
         retriever trace span). Two cheap counts, only computed when tracing."""
         principals = self.principals()
         with connect(self.org_id) as conn:
-            org_chunks = require_row(conn.execute(
-                "select count(*) as n from chunks c join documents d on d.id = c.document_id"
-                " where c.org_id = %s and d.status = 'ingested'",
-                (self.org_id,),
-            ).fetchone())["n"]
-            allowed = require_row(conn.execute(
-                "select count(*) as n from chunks c join documents d on d.id = c.document_id"
-                " where c.org_id = %s and d.status = 'ingested' and c.acl ?| %s",
-                (self.org_id, principals),
-            ).fetchone())["n"]
+            org_chunks = require_row(
+                conn.execute(
+                    "select count(*) as n from chunks c join documents d on d.id = c.document_id"
+                    " where c.org_id = %s and d.status = 'ingested'",
+                    (self.org_id,),
+                ).fetchone()
+            )["n"]
+            allowed = require_row(
+                conn.execute(
+                    "select count(*) as n from chunks c join documents d on d.id = c.document_id"
+                    " where c.org_id = %s and d.status = 'ingested' and c.acl ?| %s",
+                    (self.org_id, principals),
+                ).fetchone()
+            )["n"]
         return {"org_chunks": int(org_chunks), "allowed_chunks": int(allowed)}
 
     def search(self, query_embedding: list[float], k: int = 5) -> list[dict[str, Any]]:
@@ -419,15 +427,21 @@ class TenantScope:
         accumulates in the clear.
         """
         with connect(self.org_id) as conn:
-            row = require_row(conn.execute(
-                "insert into answers(org_id, user_id, question, provider, refused)"
-                " values (%s, %s, %s, %s, %s) returning id",
-                (self.org_id, self.ctx.user_id, question, provider, refused),
-            ).fetchone())
+            row = require_row(
+                conn.execute(
+                    "insert into answers(org_id, user_id, question, provider, refused)"
+                    " values (%s, %s, %s, %s, %s) returning id",
+                    (self.org_id, self.ctx.user_id, question, provider, refused),
+                ).fetchone()
+            )
         return str(row["id"])
 
     def finalize_answer(
-        self, answer_id: str, input_tokens: int, output_tokens: int, cost_usd: float,
+        self,
+        answer_id: str,
+        input_tokens: int,
+        output_tokens: int,
+        cost_usd: float,
         estimated: bool = False,
     ) -> None:
         """Record what an answer consumed. `estimated` marks usage inferred from
@@ -437,8 +451,7 @@ class TenantScope:
             conn.execute(
                 "update answers set input_tokens = %s, output_tokens = %s,"
                 " cost_usd = %s, usage_estimated = %s where id = %s and org_id = %s",
-                (input_tokens, output_tokens, cost_usd, estimated, answer_id,
-                 self.org_id),
+                (input_tokens, output_tokens, cost_usd, estimated, answer_id, self.org_id),
             )
             # Same transaction as the per-org ledger, so the two can never
             # disagree about whether an answer was paid for.
@@ -458,11 +471,13 @@ class TenantScope:
 
     def spend_last_24h(self) -> float:
         with connect(self.org_id) as conn:
-            row = require_row(conn.execute(
-                "select coalesce(sum(cost_usd), 0) as spend from answers"
-                " where org_id = %s and created_at > now() - interval '24 hours'",
-                (self.org_id,),
-            ).fetchone())
+            row = require_row(
+                conn.execute(
+                    "select coalesce(sum(cost_usd), 0) as spend from answers"
+                    " where org_id = %s and created_at > now() - interval '24 hours'",
+                    (self.org_id,),
+                ).fetchone()
+            )
         return float(row["spend"])
 
     def platform_spend_today(self) -> float:
@@ -477,32 +492,38 @@ class TenantScope:
 
     def questions_this_month(self) -> int:
         with connect(self.org_id) as conn:
-            row = require_row(conn.execute(
-                "select count(*) as n from answers where org_id = %s"
-                " and created_at >= date_trunc('month', now())",
-                (self.org_id,),
-            ).fetchone())
+            row = require_row(
+                conn.execute(
+                    "select count(*) as n from answers where org_id = %s"
+                    " and created_at >= date_trunc('month', now())",
+                    (self.org_id,),
+                ).fetchone()
+            )
         return int(row["n"])
 
     def storage_usage(self) -> dict[str, int]:
         """Live document count and total content bytes for this org (excluding
         deleted documents). Used to enforce ingest caps."""
         with connect(self.org_id) as conn:
-            row = require_row(conn.execute(
-                "select count(*) as docs,"
-                " coalesce(sum(octet_length(content)), 0) as bytes"
-                " from documents where org_id = %s and status <> 'deleted'",
-                (self.org_id,),
-            ).fetchone())
+            row = require_row(
+                conn.execute(
+                    "select count(*) as docs,"
+                    " coalesce(sum(octet_length(content)), 0) as bytes"
+                    " from documents where org_id = %s and status <> 'deleted'",
+                    (self.org_id,),
+                ).fetchone()
+            )
         return {"docs": int(row["docs"]), "bytes": int(row["bytes"])}
 
     def count_audit(self) -> int:
         self.require_role("admin")
         with connect(self.org_id) as conn:
-            return require_row(conn.execute(
-                "select count(*) as n from audit_log where org_id = %s",
-                (self.org_id,),
-            ).fetchone())["n"]
+            return require_row(
+                conn.execute(
+                    "select count(*) as n from audit_log where org_id = %s",
+                    (self.org_id,),
+                ).fetchone()
+            )["n"]
 
     def list_audit(self, limit: int = 100, offset: int = 0) -> list[dict[str, Any]]:
         """Recent audit events for this org. Admin only."""
@@ -570,10 +591,12 @@ class TenantScope:
 
     def count_members(self) -> int:
         with connect(self.org_id) as conn:
-            return require_row(conn.execute(
-                "select count(*) as n from memberships where org_id = %s",
-                (self.org_id,),
-            ).fetchone())["n"]
+            return require_row(
+                conn.execute(
+                    "select count(*) as n from memberships where org_id = %s",
+                    (self.org_id,),
+                ).fetchone()
+            )["n"]
 
     def list_members(self, limit: int = 100, offset: int = 0) -> list[dict[str, Any]]:
         with connect(self.org_id) as conn:

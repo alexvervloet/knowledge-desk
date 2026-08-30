@@ -36,8 +36,9 @@ def login(email: str, slug: str) -> str:
 
 
 def add_member(owner: str, email: str, role: str = "member") -> str:
-    return client.post("/members", headers=auth(owner),
-                       json={"email": email, "password": PW, "role": role}).json()["user_id"]
+    return client.post(
+        "/members", headers=auth(owner), json={"email": email, "password": PW, "role": role}
+    ).json()["user_id"]
 
 
 # --- signup / login -------------------------------------------------------
@@ -52,7 +53,9 @@ def test_signup_makes_owner_and_me_reflects_it():
 
 def test_login_wrong_password_is_401():
     signup("acme", "owner@acme.test")
-    resp = client.post("/auth/login", json={"email": "owner@acme.test", "password": "nope-nope-nope"})
+    resp = client.post(
+        "/auth/login", json={"email": "owner@acme.test", "password": "nope-nope-nope"}
+    )
     assert resp.status_code == 401
 
 
@@ -153,9 +156,9 @@ def test_another_orgs_admin_cannot_attach_an_existing_account():
     attacker = signup("evil", "boss@evil.test")
 
     resp = client.post(
-        "/members", headers=auth(attacker),
-        json={"email": "victim@acme.test", "password": "pw-attackerchose",
-              "role": "member"},
+        "/members",
+        headers=auth(attacker),
+        json={"email": "victim@acme.test", "password": "pw-attackerchose", "role": "member"},
     )
     assert resp.status_code == 409, resp.text
 
@@ -169,13 +172,11 @@ def test_the_victims_own_login_is_untouched():
     signup("acme", "victim@acme.test")
     attacker = signup("evil", "boss@evil.test")
     client.post(
-        "/members", headers=auth(attacker),
-        json={"email": "victim@acme.test", "password": "pw-attackerchose",
-              "role": "member"},
+        "/members",
+        headers=auth(attacker),
+        json={"email": "victim@acme.test", "password": "pw-attackerchose", "role": "member"},
     )
-    resp = client.post(
-        "/auth/login", json={"email": "victim@acme.test", "password": PW}
-    )
+    resp = client.post("/auth/login", json={"email": "victim@acme.test", "password": PW})
     assert resp.status_code == 200, resp.text
 
 
@@ -202,16 +203,15 @@ def test_group_add_does_not_reveal_whether_an_email_exists_elsewhere():
     group_id = client.post("/groups", headers=auth(a), json={"name": "eng"}).json()["id"]
 
     def add(email: str):
-        return client.post(
-            f"/groups/{group_id}/members", headers=auth(a), json={"email": email}
-        )
+        return client.post(f"/groups/{group_id}/members", headers=auth(a), json={"email": email})
 
     has_account_elsewhere = add("outsider@globex.test")
     has_no_account = add("nobody@nowhere.test")
 
     assert has_account_elsewhere.status_code == has_no_account.status_code == 404
-    assert (has_account_elsewhere.json()["detail"].replace("outsider@globex.test", "")
-            == has_no_account.json()["detail"].replace("nobody@nowhere.test", ""))
+    assert has_account_elsewhere.json()["detail"].replace(
+        "outsider@globex.test", ""
+    ) == has_no_account.json()["detail"].replace("nobody@nowhere.test", "")
 
 
 # --- session lifecycle ----------------------------------------------------
@@ -249,21 +249,33 @@ def test_revoked_membership_kills_session():
 
 def test_change_password_and_log_in_with_the_new_one():
     token = signup("acme", "o@acme.test")
-    resp = client.post("/me/password", headers=auth(token),
-                       json={"current_password": PW, "new_password": "brand-new-pw-1"})
+    resp = client.post(
+        "/me/password",
+        headers=auth(token),
+        json={"current_password": PW, "new_password": "brand-new-pw-1"},
+    )
     assert resp.status_code == 204
-    assert client.post("/auth/login",
-                       json={"email": "o@acme.test", "password": PW}).status_code == 401
-    assert client.post("/auth/login",
-                       json={"email": "o@acme.test",
-                             "password": "brand-new-pw-1"}).status_code == 200
+    assert (
+        client.post("/auth/login", json={"email": "o@acme.test", "password": PW}).status_code == 401
+    )
+    assert (
+        client.post(
+            "/auth/login", json={"email": "o@acme.test", "password": "brand-new-pw-1"}
+        ).status_code
+        == 200
+    )
 
 
 def test_change_password_requires_the_current_one():
     token = signup("acme", "o@acme.test")
-    assert client.post("/me/password", headers=auth(token),
-                       json={"current_password": "not-the-password",
-                             "new_password": "brand-new-pw-1"}).status_code == 401
+    assert (
+        client.post(
+            "/me/password",
+            headers=auth(token),
+            json={"current_password": "not-the-password", "new_password": "brand-new-pw-1"},
+        ).status_code
+        == 401
+    )
 
 
 def test_changing_password_revokes_other_sessions_but_not_this_one():
@@ -274,9 +286,14 @@ def test_changing_password_revokes_other_sessions_but_not_this_one():
     stale = login("o@acme.test", "acme")
     current = login("o@acme.test", "acme")
 
-    assert client.post("/me/password", headers=auth(current),
-                       json={"current_password": PW,
-                             "new_password": "brand-new-pw-1"}).status_code == 204
+    assert (
+        client.post(
+            "/me/password",
+            headers=auth(current),
+            json={"current_password": PW, "new_password": "brand-new-pw-1"},
+        ).status_code
+        == 204
+    )
     assert client.get("/me", headers=auth(stale)).status_code == 401
     assert client.get("/me", headers=auth(current)).status_code == 200
 
@@ -288,6 +305,5 @@ def test_an_admin_cannot_change_someone_elses_password():
     owner = signup("acme", "o@acme.test")
     uid = add_member(owner, "dev@acme.test")
     for path in (f"/members/{uid}/password", f"/users/{uid}/password"):
-        resp = client.post(path, headers=auth(owner),
-                           json={"new_password": "brand-new-pw-1"})
+        resp = client.post(path, headers=auth(owner), json={"new_password": "brand-new-pw-1"})
         assert resp.status_code == 404, f"{path} should not exist"

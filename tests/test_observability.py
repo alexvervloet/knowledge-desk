@@ -88,7 +88,10 @@ def test_tracer_records_spans_when_enabled(monkeypatch):
     assert root.start_kwargs["name"] == "ask"
     assert root.start_kwargs["metadata"]["org_id"] == "org-1"
     retrieval, generation = root.children  # retriever then generation
-    assert retrieval.ended and retrieval.updates[0]["output"]["acl"] == {"org_chunks": 5, "allowed_chunks": 2}
+    assert retrieval.ended and retrieval.updates[0]["output"]["acl"] == {
+        "org_chunks": 5,
+        "allowed_chunks": 2,
+    }
     assert generation.start_kwargs["as_type"] == "generation"
     assert generation.updates[0]["usage_details"] == {"input": 100, "output": 20}
     assert generation.updates[0]["cost_details"] == {"total": 0.0012}
@@ -99,6 +102,7 @@ def test_tracer_records_spans_when_enabled(monkeypatch):
 def test_tracer_redacts_pii_before_it_leaves_for_langfuse(monkeypatch):
     """The question and answer are stored unredacted in Postgres deliberately.
     Langfuse is a third party, so the same text is redacted on the way there."""
+
     @contextlib.contextmanager
     def _noop_attrs(**_kw):
         yield
@@ -127,6 +131,7 @@ def test_tracer_redacts_pii_before_it_leaves_for_langfuse(monkeypatch):
 def test_tracer_does_not_send_the_users_email_address(monkeypatch):
     """user_id already ties a trace to a person. The address is the one field
     here that identifies one on its own, so it does not go."""
+
     @contextlib.contextmanager
     def _noop_attrs(**_kw):
         yield
@@ -142,6 +147,7 @@ def test_tracer_does_not_send_the_users_email_address(monkeypatch):
 def test_a_streamed_secret_split_across_tokens_is_still_redacted(monkeypatch):
     """Redaction happens at the join. Per token, "123-45-" and "6789" each look
     harmless, and the pattern only exists once they are back together."""
+
     @contextlib.contextmanager
     def _noop_attrs(**_kw):
         yield
@@ -159,14 +165,34 @@ def test_a_streamed_secret_split_across_tokens_is_still_redacted(monkeypatch):
 
 
 def test_ask_still_streams_with_tracing_path():
-    token = client.post("/auth/signup", json={
-        "org_slug": "acme", "org_name": "Acme", "email": "o@acme.test", "password": PW,
-    }).json()["token"]
-    client.post("/sources/folder", headers={"Authorization": f"Bearer {token}"},
-                json={"documents": [{"path": "a.txt", "content": "refunds take five business days", "acl": ["public-to-org"]}]})
+    token = client.post(
+        "/auth/signup",
+        json={
+            "org_slug": "acme",
+            "org_name": "Acme",
+            "email": "o@acme.test",
+            "password": PW,
+        },
+    ).json()["token"]
+    client.post(
+        "/sources/folder",
+        headers={"Authorization": f"Bearer {token}"},
+        json={
+            "documents": [
+                {
+                    "path": "a.txt",
+                    "content": "refunds take five business days",
+                    "acl": ["public-to-org"],
+                }
+            ]
+        },
+    )
     ingest.run_pending()
-    resp = client.post("/ask", headers={"Authorization": f"Bearer {token}"},
-                       json={"question": "refunds take five business days"})
+    resp = client.post(
+        "/ask",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"question": "refunds take five business days"},
+    )
     assert resp.status_code == 200
     assert '"type": "done"' in resp.text and '"type": "sources"' in resp.text
 
@@ -175,10 +201,14 @@ def test_retrieval_stats_exposes_acl_filter():
     owner = accounts.create_org_with_owner("acme", "Acme", "o@acme.test", PW)
     x_id = accounts.add_member(owner.org_id, "x@acme.test", PW, "member")
     accounts.add_member(owner.org_id, "y@acme.test", PW, "member")
-    ingest.sync_documents(owner.org_id, "local-folder", [
-        {"path": "public.txt", "content": "everyone can read this", "acl": ["public-to-org"]},
-        {"path": "secret.txt", "content": "only x can read this", "acl": [f"user:{x_id}"]},
-    ])
+    ingest.sync_documents(
+        owner.org_id,
+        "local-folder",
+        [
+            {"path": "public.txt", "content": "everyone can read this", "acl": ["public-to-org"]},
+            {"path": "secret.txt", "content": "only x can read this", "acl": [f"user:{x_id}"]},
+        ],
+    )
     ingest.run_pending()
 
     x = TenantScope(accounts.authenticate("x@acme.test", PW, "acme"))

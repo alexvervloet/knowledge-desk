@@ -39,18 +39,18 @@ def ensure_app_role() -> str | None:
         return None
 
     with psycopg.connect(settings.database_url) as conn:
-        exists = conn.execute(
-            "select 1 from pg_roles where rolname = %s", (role,)
-        ).fetchone()
+        exists = conn.execute("select 1 from pg_roles where rolname = %s", (role,)).fetchone()
         # Identifiers cannot be parameterized; sql.Identifier quotes them safely.
         # The password is passed as a literal for the same reason.
         ident = sql.Identifier(role)
         if exists:
-            conn.execute(sql.SQL("alter role {} login password {}").format(
-                ident, sql.Literal(password)))
+            conn.execute(
+                sql.SQL("alter role {} login password {}").format(ident, sql.Literal(password))
+            )
         else:
-            conn.execute(sql.SQL("create role {} login password {}").format(
-                ident, sql.Literal(password)))
+            conn.execute(
+                sql.SQL("create role {} login password {}").format(ident, sql.Literal(password))
+            )
         conn.commit()
     return role
 
@@ -95,9 +95,7 @@ def apply_pending() -> list[str]:
                 # Silenced for pyright rather than cast, because mypy erases
                 # LiteralString to str and would then call the cast redundant.
                 conn.execute(sql_text)  # pyright: ignore[reportCallIssue, reportArgumentType]
-                conn.execute(
-                    "insert into schema_migrations(version) values (%s)", (version,)
-                )
+                conn.execute("insert into schema_migrations(version) values (%s)", (version,))
             print(f"  applied {version}")
             applied_now.append(version)
     if not applied_now:

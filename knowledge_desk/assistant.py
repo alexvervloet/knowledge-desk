@@ -71,29 +71,40 @@ def answer_stream(
         if blocked_reason is not None:
             answer_id = scope.record_answer(question, provider.name, refused=False)
             scope.mark_blocked(answer_id)
-            audit.log(scope.org_id, scope.ctx.user_id, "question.blocked",
-                      {"answer_id": answer_id, "reason": blocked_reason})
+            audit.log(
+                scope.org_id,
+                scope.ctx.user_id,
+                "question.blocked",
+                {"answer_id": answer_id, "reason": blocked_reason},
+            )
             yield {"type": "meta", "answer_id": answer_id, "provider": provider.name}
             # Deliberately caller-facing: this one is a message we chose, telling
             # the asker exactly why they got nothing.
-            trace_error = (f"[LIMIT] request blocked: {blocked_reason}."
-                           " No answer was generated.")
+            trace_error = f"[LIMIT] request blocked: {blocked_reason}." " No answer was generated."
             yield {"type": "error", "message": trace_error}
             return
 
         contexts = retrieval.search(scope, question, k)
         refused = not contexts
         answer_id = scope.record_answer(question, provider.name, refused)
-        audit.log(scope.org_id, scope.ctx.user_id, "question.asked",
-                  {"answer_id": answer_id, "refused": refused})
+        audit.log(
+            scope.org_id,
+            scope.ctx.user_id,
+            "question.asked",
+            {"answer_id": answer_id, "refused": refused},
+        )
 
         # Defusing a grammar forgery silently throws away the only interesting
         # thing about it. A corpus where this is nonzero and rising is a corpus
         # somebody is writing into, and nothing else in the system would say so.
         forged = count_defused(contexts)
         if forged:
-            audit.log(scope.org_id, scope.ctx.user_id, "retrieval.grammar_defused",
-                      {"answer_id": answer_id, "spans": forged})
+            audit.log(
+                scope.org_id,
+                scope.ctx.user_id,
+                "retrieval.grammar_defused",
+                {"answer_id": answer_id, "spans": forged},
+            )
 
         yield {"type": "meta", "answer_id": answer_id, "provider": provider.name}
 
@@ -101,13 +112,16 @@ def answer_stream(
             for word in REFUSAL.split():
                 tracer.token(word + " ")
                 yield {"type": "token", "text": word + " "}
-            yield {"type": "done", "usage": {"input_tokens": 0, "output_tokens": 0},
-                   "cost_usd": 0.0, "warnings": []}
+            yield {
+                "type": "done",
+                "usage": {"input_tokens": 0, "output_tokens": 0},
+                "cost_usd": 0.0,
+                "warnings": [],
+            }
             return
 
         sources = [
-            {"document_id": str(c["document_id"]), "ordinal": c["ordinal"],
-             "path": c["path"]}
+            {"document_id": str(c["document_id"]), "ordinal": c["ordinal"], "path": c["path"]}
             for c in contexts
         ]
         tracer.sources(sources, scope.retrieval_stats() if tracer.active else None)
@@ -115,11 +129,11 @@ def answer_stream(
 
         for event in provider.stream(question, contexts):
             if event["type"] == "usage":
-                scope.finalize_answer(answer_id, event["input_tokens"],
-                                      event["output_tokens"], event["cost_usd"])
+                scope.finalize_answer(
+                    answer_id, event["input_tokens"], event["output_tokens"], event["cost_usd"]
+                )
                 billed = True
-                tracer.done(event["input_tokens"], event["output_tokens"],
-                            event["cost_usd"])
+                tracer.done(event["input_tokens"], event["output_tokens"], event["cost_usd"])
                 # The usage frame is last, so the answer is complete here. These
                 # are detectors rather than a gate: the caller has already read
                 # the tokens. They ride out in the done frame for the UI and land
@@ -127,13 +141,18 @@ def answer_stream(
                 # a way one flagged answer is not.
                 warnings = outputchecks.check_answer("".join(streamed), contexts)
                 if warnings:
-                    audit.log(scope.org_id, scope.ctx.user_id, "answer.flagged",
-                              {"answer_id": answer_id,
-                               "codes": ",".join(w["code"] for w in warnings)})
+                    audit.log(
+                        scope.org_id,
+                        scope.ctx.user_id,
+                        "answer.flagged",
+                        {"answer_id": answer_id, "codes": ",".join(w["code"] for w in warnings)},
+                    )
                 yield {
                     "type": "done",
-                    "usage": {"input_tokens": event["input_tokens"],
-                              "output_tokens": event["output_tokens"]},
+                    "usage": {
+                        "input_tokens": event["input_tokens"],
+                        "output_tokens": event["output_tokens"],
+                    },
                     "cost_usd": event["cost_usd"],
                     "warnings": warnings,
                 }
@@ -149,13 +168,16 @@ def answer_stream(
         reference = secrets.token_hex(4)
         log.exception(
             "answer generation failed [ref=%s] org=%s user=%s",
-            reference, scope.org_id, scope.ctx.user_id,
+            reference,
+            scope.org_id,
+            scope.ctx.user_id,
         )
         trace_error = f"answer generation failed [ref={reference}]: {exc!r}"
         yield {
             "type": "error",
-            "message": ("Answer generation failed. Quote reference"
-                        f" {reference} if you report this."),
+            "message": (
+                "Answer generation failed. Quote reference" f" {reference} if you report this."
+            ),
         }
     finally:
         # A stream that never reaches its usage frame — the client disconnected,
@@ -169,7 +191,11 @@ def answer_stream(
         # token from inventing a charge.
         if answer_id is not None and not billed and streamed:
             usage = provider.estimate(question, contexts, "".join(streamed))
-            scope.finalize_answer(answer_id, usage["input_tokens"],
-                                  usage["output_tokens"], usage["cost_usd"],
-                                  estimated=True)
+            scope.finalize_answer(
+                answer_id,
+                usage["input_tokens"],
+                usage["output_tokens"],
+                usage["cost_usd"],
+                estimated=True,
+            )
         tracer.finish(error=trace_error)

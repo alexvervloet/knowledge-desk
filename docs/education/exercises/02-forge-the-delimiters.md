@@ -37,7 +37,7 @@ purpose, so there is nothing for `scripts/anchors.py` to hold it to):
 3. **Defusing text shaped like the prompt's own grammar**: markers, `[n]`
    citation keys, and the `path:` line, matched after folding so a lookalike
    spelling cannot walk past
-   ([providers.py:77-154](../../../knowledge_desk/providers.py#L77-L154)). A
+   ([providers.py:77-153](../../../knowledge_desk/providers.py#L77-L153)). A
    passage containing `[2]` can otherwise attribute its claims to a real passage
    the asker was allowed to see, and a citation check validates that, because the
    key exists.

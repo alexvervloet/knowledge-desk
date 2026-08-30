@@ -74,8 +74,9 @@ class AskTracer:
     """Collects one question's trace. Every method is exception-proof, and all
     are no-ops when Langfuse is not configured."""
 
-    def __init__(self, question: str, org_id: str, user_id: str,
-                 provider_name: str, model: str) -> None:
+    def __init__(
+        self, question: str, org_id: str, user_id: str, provider_name: str, model: str
+    ) -> None:
         self._root: Any = None
         self._retrieval: Any = None
         self._gen: Any = None
@@ -95,7 +96,9 @@ class AskTracer:
                 # ties a trace back to a person here, and an email is the one
                 # field in this payload that identifies one on its own.
                 self._root = _client.start_observation(
-                    name="ask", as_type="span", input=self._question,
+                    name="ask",
+                    as_type="span",
+                    input=self._question,
                     metadata={"org_id": org_id, "provider": provider_name},
                 )
                 self._retrieval = self._root.start_observation(
@@ -122,7 +125,9 @@ class AskTracer:
                 self._retrieval.end()
                 self._retrieval = None
             self._gen = self._root.start_observation(
-                name="answer", as_type="generation", model=self._model,
+                name="answer",
+                as_type="generation",
+                model=self._model,
                 input=self._question,
             )
         except Exception:

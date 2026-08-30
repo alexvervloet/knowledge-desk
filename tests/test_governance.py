@@ -31,16 +31,22 @@ def auth(token: str) -> dict:
 
 
 def add_member(owner: str, email: str) -> str:
-    return client.post("/members", headers=auth(owner),
-                       json={"email": email, "password": PW, "role": "member"}).json()["user_id"]
+    return client.post(
+        "/members", headers=auth(owner), json={"email": email, "password": PW, "role": "member"}
+    ).json()["user_id"]
 
 
 def login(email: str, slug: str) -> str:
-    return client.post("/auth/login", json={"email": email, "password": PW, "org_slug": slug}).json()["token"]
+    return client.post(
+        "/auth/login", json={"email": email, "password": PW, "org_slug": slug}
+    ).json()["token"]
 
 
 def upload(token: str, docs: list[dict]) -> None:
-    assert client.post("/sources/folder", headers=auth(token), json={"documents": docs}).status_code == 202
+    assert (
+        client.post("/sources/folder", headers=auth(token), json={"documents": docs}).status_code
+        == 202
+    )
     ingest.run_pending()
 
 
@@ -57,11 +63,21 @@ def org_of(token: str) -> str:
 
 def test_ingest_flags_pii():
     token = signup("acme", "o@acme.test")
-    upload(token, [
-        {"path": "hr.txt", "content": "Reach Jane at jane@acme.test or SSN 123-45-6789.",
-         "acl": ["public-to-org"]},
-        {"path": "clean.txt", "content": "The weather is nice today.", "acl": ["public-to-org"]},
-    ])
+    upload(
+        token,
+        [
+            {
+                "path": "hr.txt",
+                "content": "Reach Jane at jane@acme.test or SSN 123-45-6789.",
+                "acl": ["public-to-org"],
+            },
+            {
+                "path": "clean.txt",
+                "content": "The weather is nice today.",
+                "acl": ["public-to-org"],
+            },
+        ],
+    )
     docs = docs_by_path(token)
     assert set(docs["hr.txt"]["pii_types"]) == {"email", "ssn"}
     assert docs["clean.txt"]["pii_types"] == []
@@ -78,7 +94,10 @@ def test_delete_document_removes_it_and_its_chunks():
     assert client.delete(f"/documents/{doc_id}", headers=auth(token)).status_code == 204
     assert docs_by_path(token) == {}
     # Its chunks are gone too, so retrieval no longer surfaces it.
-    assert client.post("/search", headers=auth(token), json={"query": "alpha content here"}).json() == []
+    assert (
+        client.post("/search", headers=auth(token), json={"query": "alpha content here"}).json()
+        == []
+    )
 
 
 def test_delete_document_requires_admin():
@@ -93,6 +112,7 @@ def test_delete_document_requires_admin():
 def test_delete_unknown_document_is_404():
     token = signup("acme", "o@acme.test")
     import uuid
+
     assert client.delete(f"/documents/{uuid.uuid4()}", headers=auth(token)).status_code == 404
 
 
@@ -118,8 +138,11 @@ def test_export_is_complete_past_the_default_page_size():
     # Enqueued, not drained: the export lists documents whatever their status,
     # and embedding 120 of them would only make the test slow.
     paths = [f"doc{i:03}.txt" for i in range(120)]
-    client.post("/sources/folder", headers=auth(token),
-                json={"documents": [{"path": p, "content": p} for p in paths]})
+    client.post(
+        "/sources/folder",
+        headers=auth(token),
+        json={"documents": [{"path": p, "content": p} for p in paths]},
+    )
 
     export = client.get("/org/export", headers=auth(token)).json()
     assert {d["path"] for d in export["documents"]} == set(paths)
@@ -134,8 +157,11 @@ def test_export_sweep_pages_to_exhaustion(monkeypatch):
     for i in range(3):  # 4 members total with the owner: an exact multiple of 2
         add_member(token, f"m{i}@acme.test")
     paths = [f"d{i}.txt" for i in range(5)]  # not a multiple of 2
-    client.post("/sources/folder", headers=auth(token),
-                json={"documents": [{"path": p, "content": p} for p in paths]})
+    client.post(
+        "/sources/folder",
+        headers=auth(token),
+        json={"documents": [{"path": p, "content": p} for p in paths]},
+    )
 
     export = client.get("/org/export", headers=auth(token)).json()
     assert len(export["members"]) == 4
@@ -170,7 +196,10 @@ def test_pooled_connection_does_not_inherit_previous_tenant():
     Borrowing repeatedly until the same connection is reused proves it does not.
     """
     a = signup("acme", "o@acme.test")
-    upload(a, [{"path": "acme-only.txt", "content": "acme confidential data", "acl": ["public-to-org"]}])
+    upload(
+        a,
+        [{"path": "acme-only.txt", "content": "acme confidential data", "acl": ["public-to-org"]}],
+    )
     org_a = org_of(a)
 
     seen_ids = set()
@@ -178,11 +207,17 @@ def test_pooled_connection_does_not_inherit_previous_tenant():
         # A scoped borrow, exactly as a request would do.
         with connect(org_a) as conn:
             seen_ids.add(id(conn))
-            assert require_row(conn.execute("select count(*) as n from documents").fetchone())["n"] == 1
+            assert (
+                require_row(conn.execute("select count(*) as n from documents").fetchone())["n"]
+                == 1
+            )
         # An unscoped borrow: whatever connection this gets, it must see nothing.
         with connect() as conn:
             seen_ids.add(id(conn))
-            assert require_row(conn.execute("select count(*) as n from documents").fetchone())["n"] == 0
+            assert (
+                require_row(conn.execute("select count(*) as n from documents").fetchone())["n"]
+                == 0
+            )
 
     # The pool really did hand back the same connection object at least once,
     # so the assertions above exercised reuse rather than fresh connections.

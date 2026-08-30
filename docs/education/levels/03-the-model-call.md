@@ -66,7 +66,7 @@ document to close the fence early and pretend to be back outside it, two things
 stop them. The markers carry digits minted for this request, which a document
 written last week cannot contain, and anything merely *shaped* like a marker is
 scrubbed out of the document first, in
-[providers.py:77-154](../../../knowledge_desk/providers.py#L77-L154).
+[providers.py:77-153](../../../knowledge_desk/providers.py#L77-L153).
 
 I want to be straight with you about how strong this is. In normal programming,
 when you keep data away from instructions, you have a real guarantee. Here you
@@ -106,7 +106,7 @@ untrusted data rather than instructions. The user message is the rendered
 passages plus the question.
 
 Rendering, at
-[providers.py:162-182](../../../knowledge_desk/providers.py#L162-L182), is where the
+[providers.py:164-182](../../../knowledge_desk/providers.py#L164-L182), is where the
 security work happens:
 
 ```python
@@ -131,7 +131,7 @@ reads the result. Here the reader is a model, and "it will respect the fence" is
 a strong empirical tendency, not a theorem.
 
 Streaming. The answer arrives token by token. The API turns each token event into
-a Server Sent Events frame, in [main.py:332-354](../../../knowledge_desk/main.py#L332-L354 "ask"),
+a Server Sent Events frame, in [main.py:323-346](../../../knowledge_desk/main.py#L323-L346 "ask"),
 which is a long-lived HTTP response where the server writes `data: ...` lines as
 they become available. The browser reads them as they arrive. The reason to
 bother is entirely perceived latency: a four second wait with text appearing

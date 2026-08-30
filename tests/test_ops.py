@@ -42,12 +42,15 @@ def auth(token: str) -> dict:
 
 
 def login(email: str, slug: str) -> str:
-    return client.post("/auth/login", json={"email": email, "password": PW, "org_slug": slug}).json()["token"]
+    return client.post(
+        "/auth/login", json={"email": email, "password": PW, "org_slug": slug}
+    ).json()["token"]
 
 
 def add_member(owner: str, email: str) -> str:
-    return client.post("/members", headers=auth(owner),
-                       json={"email": email, "password": PW, "role": "member"}).json()["user_id"]
+    return client.post(
+        "/members", headers=auth(owner), json={"email": email, "password": PW, "role": "member"}
+    ).json()["user_id"]
 
 
 def upload(token: str, docs: list[dict]):
@@ -111,8 +114,10 @@ def test_rate_limit_returns_429(monkeypatch):
     monkeypatch.setattr(settings, "rate_burst", 2)
     monkeypatch.setattr(settings, "rate_per_min", 1)  # negligible refill during the test
     token = signup("acme", "o@acme.test")
-    codes = [client.post("/ask", headers=auth(token), json={"question": "hi"}).status_code
-             for _ in range(3)]
+    codes = [
+        client.post("/ask", headers=auth(token), json={"question": "hi"}).status_code
+        for _ in range(3)
+    ]
     assert codes == [200, 200, 429]
 
 
@@ -136,7 +141,10 @@ def test_platform_budget_blocks_an_org_that_is_under_its_own(monkeypatch):
     monkeypatch.setattr(settings, "platform_daily_budget_usd", 1.0)
     spent = signup("acme", "o@acme.test")
     _scope_for(spent).finalize_answer(
-        _answered_id(spent), input_tokens=1, output_tokens=1, cost_usd=1.5,
+        _answered_id(spent),
+        input_tokens=1,
+        output_tokens=1,
+        cost_usd=1.5,
     )
 
     # A different org, untouched budget of its own.
@@ -171,9 +179,15 @@ def test_signup_is_throttled(monkeypatch):
     monkeypatch.setattr(settings, "auth_rate_burst", 2)
     monkeypatch.setattr(settings, "auth_rate_per_min", 1)
     codes = [
-        client.post("/auth/signup", json={
-            "org_slug": f"org-{i}", "org_name": "O", "email": f"o{i}@x.test", "password": PW,
-        }).status_code
+        client.post(
+            "/auth/signup",
+            json={
+                "org_slug": f"org-{i}",
+                "org_name": "O",
+                "email": f"o{i}@x.test",
+                "password": PW,
+            },
+        ).status_code
         for i in range(3)
     ]
     assert codes == [201, 201, 429]
@@ -184,7 +198,9 @@ def test_auth_limit_is_independent_of_the_ask_limit(monkeypatch):
     monkeypatch.setattr(settings, "auth_rate_per_min", 1)
     token = signup("acme", "o@acme.test")
     # Signup exhausted the auth bucket, but asking is a separate limiter.
-    assert client.post("/auth/login", json={"email": "o@acme.test", "password": PW}).status_code == 429
+    assert (
+        client.post("/auth/login", json={"email": "o@acme.test", "password": PW}).status_code == 429
+    )
     assert client.post("/ask", headers=auth(token), json={"question": "hi"}).status_code == 200
 
 
@@ -246,8 +262,9 @@ def test_concurrent_uploads_cannot_both_pass_the_same_cap(monkeypatch):
     other = [{"path": f"b{i}.txt", "content": "x"} for i in range(6)]
     results = []
     with ThreadPoolExecutor(max_workers=2) as pool:
-        futures = [pool.submit(scope.sync_source, f"src-{n}", d)
-                   for n, d in enumerate((docs, other))]
+        futures = [
+            pool.submit(scope.sync_source, f"src-{n}", d) for n, d in enumerate((docs, other))
+        ]
         for f in futures:
             try:
                 results.append(f.result())
@@ -256,9 +273,11 @@ def test_concurrent_uploads_cannot_both_pass_the_same_cap(monkeypatch):
 
     assert "rejected" in results, "6 + 6 documents cannot both fit under a cap of 10"
     with connect(scope.org_id) as conn:
-        total = require_row(conn.execute(
-            "select count(*) as n from documents where org_id = %s", (scope.org_id,)
-        ).fetchone())["n"]
+        total = require_row(
+            conn.execute(
+                "select count(*) as n from documents where org_id = %s", (scope.org_id,)
+            ).fetchone()
+        )["n"]
     assert total <= 10
 
 
@@ -284,13 +303,20 @@ def test_document_cap_rejects_too_many(monkeypatch):
 
 def test_answer_records_usage():
     token = signup("acme", "o@acme.test")
-    upload(token, [{"path": "doc.txt", "content": "the sky is blue today", "acl": ["public-to-org"]}])
-    aid = next(e for e in ask_events(token, "the sky is blue today") if e["type"] == "meta")["answer_id"]
+    upload(
+        token, [{"path": "doc.txt", "content": "the sky is blue today", "acl": ["public-to-org"]}]
+    )
+    aid = next(e for e in ask_events(token, "the sky is blue today") if e["type"] == "meta")[
+        "answer_id"
+    ]
     with connect(org_of(token)) as conn:
-        row = require_row(conn.execute(
-            "select output_tokens, refused, blocked, usage_estimated"
-            " from answers where id = %s", (aid,)
-        ).fetchone())
+        row = require_row(
+            conn.execute(
+                "select output_tokens, refused, blocked, usage_estimated"
+                " from answers where id = %s",
+                (aid,),
+            ).fetchone()
+        )
     assert row["output_tokens"] > 0 and not row["refused"] and not row["blocked"]
     assert row["usage_estimated"] is False  # reported by the provider, not inferred
 
@@ -300,10 +326,13 @@ def test_answer_records_usage():
 
 def _answer_row(token: str, answer_id: str) -> dict:
     with connect(org_of(token)) as conn:
-        return require_row(conn.execute(
-            "select input_tokens, output_tokens, cost_usd, usage_estimated"
-            " from answers where id = %s", (answer_id,)
-        ).fetchone())
+        return require_row(
+            conn.execute(
+                "select input_tokens, output_tokens, cost_usd, usage_estimated"
+                " from answers where id = %s",
+                (answer_id,),
+            ).fetchone()
+        )
 
 
 def _scope_for(token: str):
@@ -317,7 +346,9 @@ def test_abandoned_stream_is_still_billed():
     though the model had already generated. Aborting every request just before
     the end was a way to spend without ever being billed."""
     token = signup("acme", "o@acme.test")
-    upload(token, [{"path": "doc.txt", "content": "the sky is blue today", "acl": ["public-to-org"]}])
+    upload(
+        token, [{"path": "doc.txt", "content": "the sky is blue today", "acl": ["public-to-org"]}]
+    )
 
     stream = assistant.answer_stream(_scope_for(token), "the sky is blue today", 5)
     answer_id = next(e for e in stream if e["type"] == "meta")["answer_id"]
@@ -344,7 +375,9 @@ def test_a_stream_that_never_reaches_the_model_is_not_billed():
 def test_abandoned_stream_counts_toward_the_org_budget():
     """The point of billing it: the spend the budget sees must move."""
     token = signup("acme", "o@acme.test")
-    upload(token, [{"path": "doc.txt", "content": "the sky is blue today", "acl": ["public-to-org"]}])
+    upload(
+        token, [{"path": "doc.txt", "content": "the sky is blue today", "acl": ["public-to-org"]}]
+    )
     scope = _scope_for(token)
 
     # The mock provider is free, so price the estimate to prove the wiring.

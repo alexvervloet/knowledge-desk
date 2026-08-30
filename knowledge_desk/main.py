@@ -93,18 +93,14 @@ def healthz() -> dict:
 def signup(
     req: SignupRequest, _: Annotated[None, Depends(auth_rate_limit)] = None
 ) -> TokenResponse:
-    ctx = accounts.create_org_with_owner(
-        req.org_slug, req.org_name, req.email, req.password
-    )
+    ctx = accounts.create_org_with_owner(req.org_slug, req.org_name, req.email, req.password)
     token = accounts.create_session(ctx)
     audit.log(ctx.org_id, ctx.user_id, "org.created", {"slug": req.org_slug})
     return TokenResponse(token=token, org_id=ctx.org_id, role=ctx.role)
 
 
 @app.post("/auth/login", response_model=TokenResponse)
-def login(
-    req: LoginRequest, _: Annotated[None, Depends(auth_rate_limit)] = None
-) -> TokenResponse:
+def login(req: LoginRequest, _: Annotated[None, Depends(auth_rate_limit)] = None) -> TokenResponse:
     ctx = accounts.authenticate(req.email, req.password, req.org_slug)
     token = accounts.create_session(ctx)
     audit.log(ctx.org_id, ctx.user_id, "user.login", {})
@@ -142,8 +138,7 @@ def change_password(
     revoked = accounts.change_password(
         ctx.user_id, req.current_password, req.new_password, hash_token(token)
     )
-    audit.log(ctx.org_id, ctx.user_id, "user.password_changed",
-              {"sessions_revoked": revoked})
+    audit.log(ctx.org_id, ctx.user_id, "user.password_changed", {"sessions_revoked": revoked})
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
@@ -156,8 +151,9 @@ def add_member(
 ) -> dict:
     scope.require_can_grant(req.role)
     user_id = accounts.add_member(scope.org_id, req.email, req.password, req.role)
-    audit.log(scope.org_id, scope.ctx.user_id, "member.added",
-              {"user_id": user_id, "role": req.role})
+    audit.log(
+        scope.org_id, scope.ctx.user_id, "member.added", {"user_id": user_id, "role": req.role}
+    )
     return {"user_id": user_id}
 
 
@@ -177,15 +173,17 @@ def set_member_role(
     user_id: str, req: SetRoleRequest, scope: Annotated[TenantScope, Depends(current_scope)]
 ) -> dict:
     scope.set_member_role(user_id, req.role)
-    audit.log(scope.org_id, scope.ctx.user_id, "member.role_changed",
-              {"user_id": user_id, "role": req.role})
+    audit.log(
+        scope.org_id,
+        scope.ctx.user_id,
+        "member.role_changed",
+        {"user_id": user_id, "role": req.role},
+    )
     return {"user_id": user_id, "role": req.role}
 
 
 @app.delete("/members/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
-def remove_member(
-    user_id: str, scope: Annotated[TenantScope, Depends(current_scope)]
-) -> Response:
+def remove_member(user_id: str, scope: Annotated[TenantScope, Depends(current_scope)]) -> Response:
     scope.remove_member(user_id)
     audit.log(scope.org_id, scope.ctx.user_id, "member.removed", {"user_id": user_id})
     return Response(status_code=status.HTTP_204_NO_CONTENT)
@@ -207,16 +205,12 @@ def list_groups(scope: Annotated[TenantScope, Depends(current_scope)]) -> list[d
 
 
 @app.get("/groups/{group_id}")
-def get_group(
-    group_id: str, scope: Annotated[TenantScope, Depends(current_scope)]
-) -> dict:
+def get_group(group_id: str, scope: Annotated[TenantScope, Depends(current_scope)]) -> dict:
     return scope.get_group(group_id)
 
 
 @app.delete("/groups/{group_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_group(
-    group_id: str, scope: Annotated[TenantScope, Depends(current_scope)]
-) -> Response:
+def delete_group(group_id: str, scope: Annotated[TenantScope, Depends(current_scope)]) -> Response:
     scope.delete_group(group_id)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
@@ -291,8 +285,7 @@ def update_document_acl(
     scope: Annotated[TenantScope, Depends(current_scope)],
 ) -> dict:
     scope.update_document_acl(document_id, req.acl)
-    audit.log(scope.org_id, scope.ctx.user_id, "document.acl_changed",
-              {"document_id": document_id})
+    audit.log(scope.org_id, scope.ctx.user_id, "document.acl_changed", {"document_id": document_id})
     return {"document_id": document_id, "acl": req.acl}
 
 
@@ -317,9 +310,7 @@ def delete_org(scope: Annotated[TenantScope, Depends(current_scope)]) -> Respons
 
 
 @app.post("/search")
-def search(
-    req: SearchRequest, scope: Annotated[TenantScope, Depends(current_scope)]
-) -> list[dict]:
+def search(req: SearchRequest, scope: Annotated[TenantScope, Depends(current_scope)]) -> list[dict]:
     """Nearest chunks the caller is permitted to see. Access filtering happens in
     the candidate fetch, so results can only ever contain allowed content.
     """
@@ -341,7 +332,8 @@ def ask(req: AskRequest, scope: Annotated[TenantScope, Depends(current_scope)]):
     allowed, retry_after = limiter.check(scope.ctx.user_id)
     if not allowed:
         raise HTTPException(
-            status_code=429, detail="rate limit exceeded",
+            status_code=429,
+            detail="rate limit exceeded",
             headers={"Retry-After": str(int(retry_after) + 1)},
         )
 
@@ -376,9 +368,7 @@ def usage(scope: Annotated[TenantScope, Depends(current_scope)]) -> dict:
 
 
 @app.post("/feedback", status_code=status.HTTP_201_CREATED)
-def feedback(
-    req: FeedbackRequest, scope: Annotated[TenantScope, Depends(current_scope)]
-) -> dict:
+def feedback(req: FeedbackRequest, scope: Annotated[TenantScope, Depends(current_scope)]) -> dict:
     scope.add_feedback(req.answer_id, req.rating, req.note)
     return {"answer_id": req.answer_id, "rating": req.rating}
 

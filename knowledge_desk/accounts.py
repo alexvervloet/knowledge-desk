@@ -25,32 +25,30 @@ from knowledge_desk.errors import AuthError, Conflict
 from knowledge_desk.tenancy import AuthContext
 
 
-def create_org_with_owner(
-    org_slug: str, org_name: str, email: str, password: str
-) -> AuthContext:
+def create_org_with_owner(org_slug: str, org_name: str, email: str, password: str) -> AuthContext:
     """Sign-up: create an org and its first user as owner, in one transaction."""
     email = email.strip().lower()
     try:
         with connect() as conn:
-            org = require_row(conn.execute(
-                "insert into orgs(slug, name) values (%s, %s) returning id",
-                (org_slug, org_name),
-            ).fetchone())
-            user = require_row(conn.execute(
-                "insert into users(email, password_hash) values (%s, %s)"
-                " returning id",
-                (email, hash_password(password)),
-            ).fetchone())
+            org = require_row(
+                conn.execute(
+                    "insert into orgs(slug, name) values (%s, %s) returning id",
+                    (org_slug, org_name),
+                ).fetchone()
+            )
+            user = require_row(
+                conn.execute(
+                    "insert into users(email, password_hash) values (%s, %s)" " returning id",
+                    (email, hash_password(password)),
+                ).fetchone()
+            )
             conn.execute(
-                "insert into memberships(user_id, org_id, role)"
-                " values (%s, %s, 'owner')",
+                "insert into memberships(user_id, org_id, role)" " values (%s, %s, 'owner')",
                 (user["id"], org["id"]),
             )
     except psycopg.errors.UniqueViolation as exc:
         raise Conflict("org slug or email already taken") from exc
-    return AuthContext(
-        user_id=str(user["id"]), org_id=str(org["id"]), role="owner", email=email
-    )
+    return AuthContext(user_id=str(user["id"]), org_id=str(org["id"]), role="owner", email=email)
 
 
 def add_member(org_id: str, email: str, password: str, role: str) -> str:
@@ -71,11 +69,12 @@ def add_member(org_id: str, email: str, password: str, role: str) -> str:
     email = email.strip().lower()
     with connect() as conn:
         try:
-            user = require_row(conn.execute(
-                "insert into users(email, password_hash) values (%s, %s)"
-                " returning id",
-                (email, hash_password(password)),
-            ).fetchone())
+            user = require_row(
+                conn.execute(
+                    "insert into users(email, password_hash) values (%s, %s)" " returning id",
+                    (email, hash_password(password)),
+                ).fetchone()
+            )
             # Unreachable by unique violation: the user was created a statement
             # ago, so no membership for them can exist yet. Same transaction, so
             # a failure here leaves no orphan user behind.
@@ -168,9 +167,7 @@ def resolve_session(raw_token: str) -> AuthContext | None:
 
 def delete_session(raw_token: str) -> None:
     with connect() as conn:
-        conn.execute(
-            "delete from sessions where token_hash = %s", (hash_token(raw_token),)
-        )
+        conn.execute("delete from sessions where token_hash = %s", (hash_token(raw_token),))
 
 
 def change_password(
@@ -189,9 +186,7 @@ def change_password(
     session survives, so changing it does not log you out of the tab you are in.
     """
     with connect() as conn:
-        row = conn.execute(
-            "select password_hash from users where id = %s", (user_id,)
-        ).fetchone()
+        row = conn.execute("select password_hash from users where id = %s", (user_id,)).fetchone()
         if row is None or not verify_password(current_password, row["password_hash"]):
             raise AuthError("current password is incorrect")
         conn.execute(
@@ -224,4 +219,3 @@ def delete_org(org_id: str) -> None:
     audit records, and sessions in one statement."""
     with connect() as conn:
         conn.execute("delete from orgs where id = %s", (org_id,))
-

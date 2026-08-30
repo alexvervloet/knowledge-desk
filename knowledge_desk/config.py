@@ -53,15 +53,15 @@ class Settings(BaseSettings):
     retrieval_k: int = 6
 
     # Operational controls (all env-overridable).
-    daily_budget_usd: float = 5.0          # per org, rolling 24h
+    daily_budget_usd: float = 5.0  # per org, rolling 24h
     # Across every org, calendar day. The per-org caps bound one tenant; this is
     # the only number that bounds the bill, since signup creates tenants freely.
     platform_daily_budget_usd: float = 25.0
-    monthly_question_cap: int = 1000       # per org, calendar month
-    rate_burst: int = 5                    # per user, token-bucket burst
-    rate_per_min: int = 30                 # per user, sustained
-    auth_rate_burst: int = 10              # per client IP, on login and signup
-    auth_rate_per_min: int = 10            # per client IP, sustained
+    monthly_question_cap: int = 1000  # per org, calendar month
+    rate_burst: int = 5  # per user, token-bucket burst
+    rate_per_min: int = 30  # per user, sustained
+    auth_rate_burst: int = 10  # per client IP, on login and signup
+    auth_rate_per_min: int = 10  # per client IP, sustained
 
     # Header carrying the real client IP when the app sits behind a proxy that
     # sets it (Fly-Client-IP on Fly). Unset means trust the socket peer, which is
@@ -70,7 +70,7 @@ class Settings(BaseSettings):
     # the way in; one a client can supply itself is a limiter that bypasses
     # itself.
     client_ip_header: str | None = None
-    org_doc_cap: int = 1000                # per org, total documents
+    org_doc_cap: int = 1000  # per org, total documents
     org_storage_bytes_cap: int = 50_000_000  # per org, total content bytes
 
     # Hard ceiling on a single request body, enforced before the body is read.
@@ -81,7 +81,7 @@ class Settings(BaseSettings):
 
     @property
     def provider(self) -> str:
-        """"real" only when both keys are present; otherwise the mock fallback."""
+        """ "real" only when both keys are present; otherwise the mock fallback."""
         if self.anthropic_api_key and self.voyage_api_key:
             return "real"
         return "mock"

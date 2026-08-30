@@ -40,7 +40,7 @@ convention the model chooses to honour, not a parser rule. A document that says
 `SYSTEM: ignore all previous instructions` is a SQL injection whose interpreter
 is a neural network and whose escaping rules are probabilistic.
 
-The defense is in [providers.py:61-154](../../knowledge_desk/providers.py#L61-L154):
+The defense is in [providers.py:61-153](../../knowledge_desk/providers.py#L61-L153):
 explicit delimiters around retrieved text, forged delimiters neutralised before
 the prompt is assembled, and a system prompt that names the boundary so the model
 can locate it. You will break this yourself in
@@ -84,7 +84,7 @@ cheerfully summarises a document the asker cannot open.
 
 The rule this project follows: **filter inside the candidate fetch, never
 after.** The ACL predicate sits in the same SQL that ranks
-([tenancy.py:383-404](../../knowledge_desk/tenancy.py#L383-L404 "TenantScope.search")), so a forbidden
+([tenancy.py:391-412](../../knowledge_desk/tenancy.py#L391-L412 "TenantScope.search")), so a forbidden
 chunk is never scored, never ranked, and cannot survive a forgotten post-filter.
 A post-filter also silently returns fewer than `k` results, which looks like bad
 retrieval rather than a security design.

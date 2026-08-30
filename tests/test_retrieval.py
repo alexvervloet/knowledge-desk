@@ -34,7 +34,8 @@ def auth(token: str) -> dict:
 
 def add_member(owner: str, email: str, role: str = "member") -> str:
     resp = client.post(
-        "/members", headers=auth(owner),
+        "/members",
+        headers=auth(owner),
         json={"email": email, "password": PW, "role": role},
     )
     assert resp.status_code == 201, resp.text
@@ -48,7 +49,10 @@ def login(email: str, slug: str) -> str:
 
 
 def upload(token: str, docs: list[dict]) -> None:
-    assert client.post("/sources/folder", headers=auth(token), json={"documents": docs}).status_code == 202
+    assert (
+        client.post("/sources/folder", headers=auth(token), json={"documents": docs}).status_code
+        == 202
+    )
     ingest.run_pending()
 
 
@@ -92,7 +96,16 @@ def test_forbidden_doc_absent_for_any_query():
 def test_public_to_org_visible_to_all_members():
     owner = signup("acme", "owner@acme.test")
     add_member(owner, "y@acme.test")
-    upload(owner, [{"path": "handbook.txt", "content": "Company handbook for everyone.", "acl": ["public-to-org"]}])
+    upload(
+        owner,
+        [
+            {
+                "path": "handbook.txt",
+                "content": "Company handbook for everyone.",
+                "acl": ["public-to-org"],
+            }
+        ],
+    )
     y = login("y@acme.test", "acme")
     assert "handbook.txt" in found(y, "Company handbook for everyone.")
 
@@ -103,7 +116,10 @@ def test_group_scoped_visible_only_to_group_members():
     add_member(owner, "other@acme.test")
     gid = client.post("/groups", headers=auth(owner), json={"name": "eng"}).json()["id"]
     client.post(f"/groups/{gid}/members", headers=auth(owner), json={"email": "dev@acme.test"})
-    upload(owner, [{"path": "eng.txt", "content": "Engineering runbook secret.", "acl": [f"group:{gid}"]}])
+    upload(
+        owner,
+        [{"path": "eng.txt", "content": "Engineering runbook secret.", "acl": [f"group:{gid}"]}],
+    )
 
     dev, other = login("dev@acme.test", "acme"), login("other@acme.test", "acme")
     assert "eng.txt" in found(dev, "Engineering runbook secret.")
@@ -115,13 +131,18 @@ def test_removing_from_group_revokes_access_immediately():
     dev_id = add_member(owner, "dev@acme.test")
     gid = client.post("/groups", headers=auth(owner), json={"name": "eng"}).json()["id"]
     client.post(f"/groups/{gid}/members", headers=auth(owner), json={"email": "dev@acme.test"})
-    upload(owner, [{"path": "eng.txt", "content": "Engineering runbook secret.", "acl": [f"group:{gid}"]}])
+    upload(
+        owner,
+        [{"path": "eng.txt", "content": "Engineering runbook secret.", "acl": [f"group:{gid}"]}],
+    )
 
     dev = login("dev@acme.test", "acme")
     assert "eng.txt" in found(dev, "Engineering runbook secret.")
     # Principals are recomputed per query, so revocation takes effect at once.
     with connect() as conn:
-        conn.execute("delete from group_members where group_id = %s and user_id = %s", (gid, dev_id))
+        conn.execute(
+            "delete from group_members where group_id = %s and user_id = %s", (gid, dev_id)
+        )
     assert "eng.txt" not in found(dev, "Engineering runbook secret.")
 
 
@@ -153,8 +174,9 @@ def test_an_empty_acl_denies_rather_than_defaulting_to_the_org():
     upload(owner, [{"path": "locked.txt", "content": SECRET, "acl": []}])
 
     assert found(owner, SECRET) == set()
-    doc = next(d for d in client.get("/documents", headers=auth(owner)).json()
-               if d["path"] == "locked.txt")
+    doc = next(
+        d for d in client.get("/documents", headers=auth(owner)).json() if d["path"] == "locked.txt"
+    )
     assert doc["acl"] == []
 
 

@@ -8,9 +8,7 @@ from __future__ import annotations
 from knowledge_desk.config import settings
 
 
-def chunk_text(
-    text: str, size: int | None = None, overlap: int | None = None
-) -> list[str]:
+def chunk_text(text: str, size: int | None = None, overlap: int | None = None) -> list[str]:
     size = size or settings.chunk_size
     overlap = settings.chunk_overlap if overlap is None else overlap
     if size <= 0:

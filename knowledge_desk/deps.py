@@ -86,7 +86,5 @@ _STATUS = {
 def register_error_handlers(app: FastAPI) -> None:
     @app.exception_handler(DomainError)
     async def _handle(_: Request, exc: DomainError) -> JSONResponse:
-        status = next(
-            (code for typ, code in _STATUS.items() if isinstance(exc, typ)), 400
-        )
+        status = next((code for typ, code in _STATUS.items() if isinstance(exc, typ)), 400)
         return JSONResponse(status_code=status, content={"detail": str(exc)})

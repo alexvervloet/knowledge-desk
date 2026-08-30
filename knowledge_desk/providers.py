@@ -89,8 +89,10 @@ def fence_tags(nonce: str) -> tuple[str, str]:
 # grammar that sit inside the fence where the nonce cannot help.
 _GRAMMAR = [
     # Fence markers, in any dialect. Whitespace and case vary freely.
-    (re.compile(r"<+\s*/?\s*(?:END[_\s-]*)?UNTRUSTED[_\s-]*DOCUMENT[^>]*>+",
-                re.IGNORECASE), "[marker removed]"),
+    (
+        re.compile(r"<+\s*/?\s*(?:END[_\s-]*)?UNTRUSTED[_\s-]*DOCUMENT[^>]*>+", re.IGNORECASE),
+        "[marker removed]",
+    ),
     # The citation label. A passage containing "[2]" can otherwise attribute its
     # own claims to a passage the asker was allowed to see, and a citation check
     # would validate it, because the key is real. The cost is honest: a document
@@ -154,8 +156,9 @@ def count_defused(contexts: list[dict[str, Any]]) -> int:
     rising is a corpus somebody is writing into, and that is a fact about the
     tenant that nothing else in the system would surface.
     """
-    return sum(_defuse(str(c.get("path", "")))[1] + _defuse(str(c.get("text", "")))[1]
-               for c in contexts)
+    return sum(
+        _defuse(str(c.get("path", "")))[1] + _defuse(str(c.get("text", "")))[1] for c in contexts
+    )
 
 
 def _cost(model: str, input_tokens: int, output_tokens: int) -> float:
@@ -250,16 +253,12 @@ def unfenced_untrusted(
     def leaks(value: str) -> bool:
         if len(value) <= min_run:
             return value in outside
-        return any(
-            value[i : i + min_run] in outside for i in range(len(value) - min_run + 1)
-        )
+        return any(value[i : i + min_run] in outside for i in range(len(value) - min_run + 1))
 
     return sorted(name for name, value in fields.items() if value and leaks(value))
 
 
-def _build_user_turn(
-    question: str, contexts: list[dict[str, Any]], nonce: str
-) -> str:
+def _build_user_turn(question: str, contexts: list[dict[str, Any]], nonce: str) -> str:
     """Assemble the user turn for one request.
 
     One function, because `unfenced_untrusted` is only meaningful against a
@@ -302,9 +301,7 @@ class MockAnswerProvider:
             "cost_usd": 0.0,  # the mock calls nothing, so it costs nothing
         }
 
-    def stream(
-        self, question: str, contexts: list[dict[str, Any]]
-    ) -> Iterator[dict[str, Any]]:
+    def stream(self, question: str, contexts: list[dict[str, Any]]) -> Iterator[dict[str, Any]]:
         cited = contexts[0]["path"] if contexts else "unknown"
         # Quote the passage the way the system prompt asks a real model to. The
         # mock exists so the keyless path exercises the real contract, and the
@@ -317,8 +314,7 @@ class MockAnswerProvider:
         )
         for word in answer.split():
             yield {"type": "token", "text": word + " "}
-        input_tokens = (len(_render_context(contexts, new_fence_nonce())) // 4
-                        + len(question) // 4)
+        input_tokens = len(_render_context(contexts, new_fence_nonce())) // 4 + len(question) // 4
         output_tokens = len(answer) // 4
         yield {
             "type": "usage",
@@ -350,9 +346,7 @@ class ClaudeAnswerProvider:
             "cost_usd": _cost(self._model, input_tokens, output_tokens),
         }
 
-    def stream(
-        self, question: str, contexts: list[dict[str, Any]]
-    ) -> Iterator[dict[str, Any]]:
+    def stream(self, question: str, contexts: list[dict[str, Any]]) -> Iterator[dict[str, Any]]:
         user = _build_user_turn(question, contexts, new_fence_nonce())
         with self._client.messages.stream(
             model=self._model,

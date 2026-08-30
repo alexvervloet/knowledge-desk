@@ -19,7 +19,12 @@ pytestmark = pytest.mark.usefixtures("clean_db")
 def signup(slug: str, email: str) -> str:
     resp = client.post(
         "/auth/signup",
-        json={"org_slug": slug, "org_name": slug.title(), "email": email, "password": "pw-supersecret"},
+        json={
+            "org_slug": slug,
+            "org_name": slug.title(),
+            "email": email,
+            "password": "pw-supersecret",
+        },
     )
     assert resp.status_code == 201, resp.text
     return resp.json()["token"]
@@ -44,9 +49,9 @@ def drain_until_settled(max_rounds: int = 6) -> None:
     for _ in range(max_rounds):
         ingest.run_pending()
         with connect() as conn:
-            remaining = require_row(conn.execute(
-                "select count(*) as n from jobs where status = 'queued'"
-            ).fetchone())["n"]
+            remaining = require_row(
+                conn.execute("select count(*) as n from jobs where status = 'queued'").fetchone()
+            )["n"]
             if remaining == 0:
                 return
             conn.execute("update jobs set run_after = now() where status = 'queued'")
@@ -57,10 +62,13 @@ def drain_until_settled(max_rounds: int = 6) -> None:
 
 def test_upload_then_drain_ingests_with_chunks():
     token = signup("acme", "o@acme.test")
-    resp = upload(token, [
-        {"path": "a.txt", "content": "alpha " * 400},
-        {"path": "b.txt", "content": "beta " * 400},
-    ])
+    resp = upload(
+        token,
+        [
+            {"path": "a.txt", "content": "alpha " * 400},
+            {"path": "b.txt", "content": "beta " * 400},
+        ],
+    )
     assert resp.status_code == 202
     assert resp.json() == {"enqueued": 2, "unchanged": 0, "deleted": 0}
 
@@ -80,25 +88,34 @@ def test_resync_identical_is_all_unchanged():
 
 def test_edit_reembeds_only_changed():
     token = signup("acme", "o@acme.test")
-    upload(token, [
-        {"path": "a.txt", "content": "alpha " * 400},
-        {"path": "b.txt", "content": "beta " * 400},
-    ])
+    upload(
+        token,
+        [
+            {"path": "a.txt", "content": "alpha " * 400},
+            {"path": "b.txt", "content": "beta " * 400},
+        ],
+    )
     ingest.run_pending()
     # Change only b.txt; a.txt is unchanged and must not be re-enqueued.
-    result = upload(token, [
-        {"path": "a.txt", "content": "alpha " * 400},
-        {"path": "b.txt", "content": "beta EDITED " * 400},
-    ]).json()
+    result = upload(
+        token,
+        [
+            {"path": "a.txt", "content": "alpha " * 400},
+            {"path": "b.txt", "content": "beta EDITED " * 400},
+        ],
+    ).json()
     assert result == {"enqueued": 1, "unchanged": 1, "deleted": 0}
 
 
 def test_dropped_file_is_deleted_and_chunks_removed():
     token = signup("acme", "o@acme.test")
-    upload(token, [
-        {"path": "a.txt", "content": "alpha " * 400},
-        {"path": "b.txt", "content": "beta " * 400},
-    ])
+    upload(
+        token,
+        [
+            {"path": "a.txt", "content": "alpha " * 400},
+            {"path": "b.txt", "content": "beta " * 400},
+        ],
+    )
     ingest.run_pending()
     # Re-upload without a.txt: it should be marked deleted with no chunks.
     result = upload(token, [{"path": "b.txt", "content": "beta " * 400}]).json()
@@ -120,9 +137,11 @@ def test_dropped_file_releases_its_bytes():
     upload(token, [])  # drop it
     quota = client.get("/usage", headers=auth(token)).json()["storage"]["bytes"]
     with connect() as conn:
-        stored = require_row(conn.execute(
-            "select coalesce(sum(octet_length(content)), 0) as n from documents"
-        ).fetchone())["n"]
+        stored = require_row(
+            conn.execute(
+                "select coalesce(sum(octet_length(content)), 0) as n from documents"
+            ).fetchone()
+        )["n"]
     assert quota == 0
     assert stored == 0, "bytes that stopped counting must not still be on disk"
 
@@ -147,10 +166,13 @@ def test_resync_after_a_drop_still_reingests():
 
 def test_poison_document_dead_letters_without_wedging_queue():
     token = signup("acme", "o@acme.test")
-    upload(token, [
-        {"path": "good.txt", "content": "hello " * 400},
-        {"path": "poison.txt", "content": "intro " + EMBED_FAIL_MARKER + " tail"},
-    ])
+    upload(
+        token,
+        [
+            {"path": "good.txt", "content": "hello " * 400},
+            {"path": "poison.txt", "content": "intro " + EMBED_FAIL_MARKER + " tail"},
+        ],
+    )
     drain_until_settled()
 
     docs = docs_by_path(token)
@@ -158,9 +180,9 @@ def test_poison_document_dead_letters_without_wedging_queue():
     assert docs["good.txt"]["status"] == "ingested"
     assert docs["poison.txt"]["status"] == "failed"
     with connect() as conn:
-        dead = require_row(conn.execute(
-            "select count(*) as n from jobs where status = 'dead'"
-        ).fetchone())["n"]
+        dead = require_row(
+            conn.execute("select count(*) as n from jobs where status = 'dead'").fetchone()
+        )["n"]
     assert dead == 1
 
 
@@ -169,6 +191,7 @@ def test_short_embedding_batch_fails_instead_of_dropping_chunks(monkeypatch):
     zipped short: the document was marked ingested holding a subset of its
     chunks, with nothing anywhere to say the rest were missing. That is a
     permanent, invisible hole in retrieval, so it must fail loudly instead."""
+
     class ShortEmbedder:
         def embed_documents(self, texts):
             return MockEmbedder().embed_documents(texts)[:-1]  # one vector short

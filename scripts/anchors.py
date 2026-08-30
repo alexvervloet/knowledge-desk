@@ -140,16 +140,20 @@ def run(fix: bool, adopt: bool, tidy: bool) -> int:
                 expect = f"{start}-{end}" if end else str(start)
                 if m.group("text_range") != expect:
                     problems.append(
-                        f"{rel}: text says {mod}:{m.group('text_range')},"
-                        f" anchor says L{expect}")
+                        f"{rel}: text says {mod}:{m.group('text_range')}," f" anchor says L{expect}"
+                    )
                     if fix:
                         return _render(m, mod, start, end, None)
-                blank = [n for n in filter(None, (start, end))
-                         if n <= len(src) and src[n - 1].strip() == ""]
+                blank = [
+                    n
+                    for n in filter(None, (start, end))
+                    if n <= len(src) and src[n - 1].strip() == ""
+                ]
                 if blank:
                     problems.append(
                         f"{rel}: {mod}:{','.join('L' + str(n) for n in blank)}"
-                        f" {'are' if len(blank) > 1 else 'is'} a blank line")
+                        f" {'are' if len(blank) > 1 else 'is'} a blank line"
+                    )
                     if tidy:
                         ns, ne = _shrink(src, start, end)
                         return _render(m, mod, ns, ne, None)
@@ -158,12 +162,12 @@ def run(fix: bool, adopt: bool, tidy: bool) -> int:
             # A missing end means a single-line link, so compare it as a span of
             # one. Without this a one-line symbol reports drift on every run and
             # the rewrite is a no-op, which is a checker that can never go green.
-            want_text = (f"{want[0]}-{want[1]}" if want[0] != want[1]
-                         else str(want[0]))
+            want_text = f"{want[0]}-{want[1]}" if want[0] != want[1] else str(want[0])
             if (start, end or start) != want or m.group("text_range") != want_text:
                 problems.append(
                     f"{rel}: {mod} {symbol!r} is at L{want[0]}-L{want[1]},"
-                    f" link says L{start}-L{end or start}")
+                    f" link says L{start}-L{end or start}"
+                )
                 if fix or adopt:
                     return _render(m, mod, want[0], want[1], symbol)
             elif adopt and not m.group("symbol"):
@@ -194,10 +198,12 @@ def _render(m: re.Match[str], mod: str, start: int, end: int, symbol: str | None
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--fix", action="store_true", help="rewrite drifted anchors")
-    ap.add_argument("--adopt", action="store_true",
-                    help="record the symbol for anchors that already match one")
-    ap.add_argument("--tidy", action="store_true",
-                    help="pull range boundaries off blank lines, inwards")
+    ap.add_argument(
+        "--adopt", action="store_true", help="record the symbol for anchors that already match one"
+    )
+    ap.add_argument(
+        "--tidy", action="store_true", help="pull range boundaries off blank lines, inwards"
+    )
     args = ap.parse_args()
     return run(fix=args.fix, adopt=args.adopt, tidy=args.tidy)
 

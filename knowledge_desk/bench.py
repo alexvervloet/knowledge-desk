@@ -50,12 +50,14 @@ def _seed(chunks: int, with_index: bool = False, seed: int = 7) -> tuple[str, st
     doc_ids: list[str] = []
     with connect(ctx.org_id) as conn:
         for i in range((chunks + per_doc - 1) // per_doc):
-            row = require_row(conn.execute(
-                "insert into documents(org_id, source, path, content, content_hash, acl, status)"
-                " values (%s, 'bench', %s, '', %s, '[\"public-to-org\"]'::jsonb, 'ingested')"
-                " returning id",
-                (ctx.org_id, f"bench/doc{i:05d}.md", f"hash{i:05d}"),
-            ).fetchone())
+            row = require_row(
+                conn.execute(
+                    "insert into documents(org_id, source, path, content, content_hash, acl, status)"
+                    " values (%s, 'bench', %s, '', %s, '[\"public-to-org\"]'::jsonb, 'ingested')"
+                    " returning id",
+                    (ctx.org_id, f"bench/doc{i:05d}.md", f"hash{i:05d}"),
+                ).fetchone()
+            )
             doc_ids.append(str(row["id"]))
 
     # Bulk load as the owner for two reasons. Postgres refuses COPY FROM on a
@@ -75,16 +77,26 @@ def _seed(chunks: int, with_index: bool = False, seed: int = 7) -> tuple[str, st
         ) as copy:
             for i in range(chunks):
                 vec = "[" + ",".join(f"{v:.5f}" for v in _rand_vec(rng)) + "]"
-                copy.write_row((ctx.org_id, doc_ids[i // per_doc], i % per_doc,
-                                f"synthetic chunk {i}", vec, '["public-to-org"]'))
+                copy.write_row(
+                    (
+                        ctx.org_id,
+                        doc_ids[i // per_doc],
+                        i % per_doc,
+                        f"synthetic chunk {i}",
+                        vec,
+                        '["public-to-org"]',
+                    )
+                )
         conn.commit()
         load = time.perf_counter() - t0
         print(f"  copied {chunks} chunks in {load:.1f}s (no vector index)")
 
         if with_index:
             t1 = time.perf_counter()
-            conn.execute("create index chunks_embedding_hnsw"
-                         " on chunks using hnsw (embedding vector_cosine_ops)")
+            conn.execute(
+                "create index chunks_embedding_hnsw"
+                " on chunks using hnsw (embedding vector_cosine_ops)"
+            )
             conn.commit()
             print(f"  built hnsw index in {time.perf_counter() - t1:.1f}s")
     load = time.perf_counter() - t0
@@ -114,8 +126,11 @@ def _main() -> int:
     ap.add_argument("--chunks", type=int, default=100_000)
     ap.add_argument("--queries", type=int, default=20)
     ap.add_argument("--no-seed", action="store_true", help="reuse the existing bench org")
-    ap.add_argument("--with-index", action="store_true",
-                    help="build the HNSW index after loading, to A/B it against the default")
+    ap.add_argument(
+        "--with-index",
+        action="store_true",
+        help="build the HNSW index after loading, to A/B it against the default",
+    )
     args = ap.parse_args()
 
     if args.no_seed:
@@ -130,10 +145,15 @@ def _main() -> int:
 
     with connect(org_id) as conn:
         n = require_row(conn.execute("select count(*) as n from chunks").fetchone())["n"]
-        has_index = require_row(conn.execute(
-            "select count(*) as n from pg_indexes where tablename = 'chunks'"
-            " and indexdef ilike '%%hnsw%%'"
-        ).fetchone())["n"] > 0
+        has_index = (
+            require_row(
+                conn.execute(
+                    "select count(*) as n from pg_indexes where tablename = 'chunks'"
+                    " and indexdef ilike '%%hnsw%%'"
+                ).fetchone()
+            )["n"]
+            > 0
+        )
 
     _time_search(scope, 3, rng)  # warm the cache so we measure steady state
     timings = _time_search(scope, args.queries, rng)

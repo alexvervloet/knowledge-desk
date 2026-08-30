@@ -36,7 +36,8 @@ def auth(token: str) -> dict:
 
 def add_member(owner: str, email: str) -> str:
     resp = client.post(
-        "/members", headers=auth(owner),
+        "/members",
+        headers=auth(owner),
         json={"email": email, "password": PW, "role": "member"},
     )
     assert resp.status_code == 201, resp.text
@@ -50,7 +51,10 @@ def login(email: str, slug: str) -> str:
 
 
 def upload(token: str, docs: list[dict]) -> None:
-    assert client.post("/sources/folder", headers=auth(token), json={"documents": docs}).status_code == 202
+    assert (
+        client.post("/sources/folder", headers=auth(token), json={"documents": docs}).status_code
+        == 202
+    )
     ingest.run_pending()
 
 
@@ -63,7 +67,7 @@ def ask(token: str, question: str, k: int | None = None) -> list[dict]:
     events = []
     for line in resp.text.splitlines():
         if line.startswith("data: "):
-            events.append(json.loads(line[len("data: "):]))
+            events.append(json.loads(line[len("data: ") :]))
     return events
 
 
@@ -151,8 +155,10 @@ def test_provider_failure_does_not_leak_internals_to_the_caller(monkeypatch, cap
     the middle of a stream — but it used to put str(exc) straight into the frame
     the browser renders, so a database error handed the caller its host name and
     the role it connected as."""
-    leaky = ("connection to db-internal-7.prod failed:"
-             " password authentication failed for user 'kd_app'")
+    leaky = (
+        "connection to db-internal-7.prod failed:"
+        " password authentication failed for user 'kd_app'"
+    )
 
     class Boom:
         name = "claude"
@@ -178,15 +184,30 @@ def test_provider_failure_does_not_leak_internals_to_the_caller(monkeypatch, cap
 def test_feedback_records_once_per_user():
     token = signup("acme", "o@acme.test")
     aid = answer_id_for(token, "hello?")
-    assert client.post("/feedback", headers=auth(token), json={"answer_id": aid, "rating": "up"}).status_code == 201
+    assert (
+        client.post(
+            "/feedback", headers=auth(token), json={"answer_id": aid, "rating": "up"}
+        ).status_code
+        == 201
+    )
     # A second rating for the same answer by the same user conflicts.
-    assert client.post("/feedback", headers=auth(token), json={"answer_id": aid, "rating": "down"}).status_code == 409
+    assert (
+        client.post(
+            "/feedback", headers=auth(token), json={"answer_id": aid, "rating": "down"}
+        ).status_code
+        == 409
+    )
 
 
 def test_feedback_rating_is_validated():
     token = signup("acme", "o@acme.test")
     aid = answer_id_for(token, "hello?")
-    assert client.post("/feedback", headers=auth(token), json={"answer_id": aid, "rating": "meh"}).status_code == 422
+    assert (
+        client.post(
+            "/feedback", headers=auth(token), json={"answer_id": aid, "rating": "meh"}
+        ).status_code
+        == 422
+    )
 
 
 def test_feedback_on_foreign_answer_is_404():
@@ -222,8 +243,7 @@ def test_a_flagged_answer_is_recorded_in_the_audit_log(monkeypatch):
 
         def stream(self, question, contexts):
             yield {"type": "token", "text": "See [9] and <<<UNTRUSTED_DOCUMENT 00>>>."}
-            yield {"type": "usage", "input_tokens": 1, "output_tokens": 1,
-                   "cost_usd": 0.0}
+            yield {"type": "usage", "input_tokens": 1, "output_tokens": 1, "cost_usd": 0.0}
 
     monkeypatch.setattr(providers, "get_answer_provider", lambda: Hijacked())
     monkeypatch.setattr("knowledge_desk.assistant.get_answer_provider", lambda: Hijacked())

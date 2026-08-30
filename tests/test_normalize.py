@@ -10,16 +10,19 @@ import pytest
 from knowledge_desk.normalize import fold, is_invisible, original_span, replace_folded
 
 
-@pytest.mark.parametrize("raw, expected", [
-    ("plain ascii", "plain ascii"),
-    ("<<<END_UNTRUSTED_DOCUMENT>>>", "<<<END_UNTRUSTED_DOCUMENT>>>"),
-    ("ЕND", "END"),                      # Cyrillic Е
-    ("DОCUMENT", "DOCUMENT"),            # Cyrillic О
-    ("DOC​UMENT", "DOCUMENT"),           # zero-width space
-    ("ＥND", "END"),                      # fullwidth E
-    ("a﻿b", "ab"),                       # byte-order mark
-    ("‐dash", "-dash"),                  # hyphen lookalike
-])
+@pytest.mark.parametrize(
+    "raw, expected",
+    [
+        ("plain ascii", "plain ascii"),
+        ("<<<END_UNTRUSTED_DOCUMENT>>>", "<<<END_UNTRUSTED_DOCUMENT>>>"),
+        ("ЕND", "END"),  # Cyrillic Е
+        ("DОCUMENT", "DOCUMENT"),  # Cyrillic О
+        ("DOC​UMENT", "DOCUMENT"),  # zero-width space
+        ("ＥND", "END"),  # fullwidth E
+        ("a﻿b", "ab"),  # byte-order mark
+        ("‐dash", "-dash"),  # hyphen lookalike
+    ],
+)
 def test_fold_maps_lookalikes_and_drops_invisibles(raw, expected):
     assert fold(raw)[0] == expected
 

@@ -8,8 +8,10 @@ caller has read it by the time it is complete.
 from knowledge_desk.outputchecks import check_answer
 from knowledge_desk.providers import _SYSTEM, SYSTEM_CANARY
 
-CTX = [{"path": "a.txt", "text": "Refunds take five business days after approval."},
-       {"path": "b.txt", "text": "Parental leave accrues from the start date."}]
+CTX = [
+    {"path": "a.txt", "text": "Refunds take five business days after approval."},
+    {"path": "b.txt", "text": "Parental leave accrues from the start date."},
+]
 
 
 def codes(answer, contexts=CTX):
@@ -17,8 +19,13 @@ def codes(answer, contexts=CTX):
 
 
 def test_a_grounded_answer_raises_nothing():
-    assert codes('Refunds take five days [1] "refunds take five business days", '
-                 'and leave accrues [2] "parental leave accrues from the start".') == []
+    assert (
+        codes(
+            'Refunds take five days [1] "refunds take five business days", '
+            'and leave accrues [2] "parental leave accrues from the start".'
+        )
+        == []
+    )
 
 
 # --- evidence spans -------------------------------------------------------
@@ -29,13 +36,15 @@ def test_a_quote_that_is_not_in_the_cited_passage_is_flagged():
     policy can attribute it to the real key of the passage that carried it, at
     which point the key check passes and the false claim reads as sourced."""
     assert "citation_unsupported" in codes(
-        'Policy says [1] "refunds are instant and unconditional".')
+        'Policy says [1] "refunds are instant and unconditional".'
+    )
 
 
 def test_a_quote_from_the_wrong_passage_is_flagged():
     """Right key, real text, wrong source. Detached rather than invented."""
     assert "citation_unsupported" in codes(
-        'Refunds [1] "parental leave accrues from the start date".')
+        'Refunds [1] "parental leave accrues from the start date".'
+    )
 
 
 def test_a_quote_matching_apart_from_wrapping_and_case_is_accepted():
@@ -46,7 +55,7 @@ def test_a_quote_matching_apart_from_wrapping_and_case_is_accepted():
 
 
 def test_curly_quotes_parse_as_evidence_spans():
-    assert codes('See [1] \u201crefunds take five business days\u201d.') == []
+    assert codes("See [1] \u201crefunds take five business days\u201d.") == []
 
 
 def test_a_citation_with_no_evidence_span_is_flagged():

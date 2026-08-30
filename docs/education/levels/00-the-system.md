@@ -57,7 +57,7 @@ each with a `text` column and an `embedding` column, where the embedding is a
 1,024-dimensional float vector stored in Postgres by the pgvector extension.
 Retrieval is a nearest-neighbour query under cosine distance, written in SQL with
 the `<=>` operator, in
-[tenancy.py:383-404](../../../knowledge_desk/tenancy.py#L383-L404 "TenantScope.search").
+[tenancy.py:391-412](../../../knowledge_desk/tenancy.py#L391-L412 "TenantScope.search").
 
 You already know what makes that expensive. Exact nearest neighbour over N rows
 is O(N) distance computations per query, and each one touches 1,024 floats. So
@@ -125,7 +125,7 @@ convention the model chooses to honour rather than a rule a parser enforces. A
 document containing `SYSTEM: ignore all previous instructions` is an injection
 attack whose interpreter is a neural network and whose escaping rules are
 probabilistic. The defense is in
-[providers.py:61-154](../../../knowledge_desk/providers.py#L61-L154) and it is worth
+[providers.py:61-153](../../../knowledge_desk/providers.py#L61-L153) and it is worth
 reading because it is so unsatisfying compared to parameterised SQL.
 
 Wrong output is not an error. Your training says a bug throws, or returns a

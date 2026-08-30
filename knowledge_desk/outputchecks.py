@@ -88,14 +88,15 @@ def check_answer(answer: str, contexts: list[dict[str, Any]]) -> list[dict[str, 
     # because a fabricated citation number destroys trust in every real one the
     # moment a reader follows it and finds nothing.
     allowed = range(1, len(contexts) + 1)
-    bad = sorted({int(m.group(1)) for m in _CITATION.finditer(folded)}
-                 - set(allowed))
+    bad = sorted({int(m.group(1)) for m in _CITATION.finditer(folded)} - set(allowed))
     if bad:
-        findings.append({
-            "code": "citation_out_of_range",
-            "detail": f"cited {', '.join(f'[{n}]' for n in bad)} with"
-                      f" {len(contexts)} passage(s) retrieved",
-        })
+        findings.append(
+            {
+                "code": "citation_out_of_range",
+                "detail": f"cited {', '.join(f'[{n}]' for n in bad)} with"
+                f" {len(contexts)} passage(s) retrieved",
+            }
+        )
 
     # Whether each quoted claim is actually in the passage it cites. This is what
     # citation *existence* does not give you: a model that reads a forged policy
@@ -117,50 +118,61 @@ def check_answer(answer: str, contexts: list[dict[str, Any]]) -> list[dict[str, 
         if _comparable(m.group(2)) not in passages[n - 1]:
             unsupported.append(f"[{n}]")
     if unsupported:
-        findings.append({
-            "code": "citation_unsupported",
-            "detail": f"quoted text not found in the cited passage: "
-                      f"{', '.join(sorted(set(unsupported)))}",
-        })
+        findings.append(
+            {
+                "code": "citation_unsupported",
+                "detail": f"quoted text not found in the cited passage: "
+                f"{', '.join(sorted(set(unsupported)))}",
+            }
+        )
 
     # A citation carrying no quote is verified against nothing. Reported, because
     # otherwise a model that quietly stops quoting disables the check above and
     # every finding here keeps reading green.
-    unquoted = sorted({int(m.group(1)) for m in _CITATION.finditer(folded)}
-                      & set(allowed) - quoted)
+    unquoted = sorted({int(m.group(1)) for m in _CITATION.finditer(folded)} & set(allowed) - quoted)
     if unquoted:
-        findings.append({
-            "code": "citation_unquoted",
-            "detail": f"cited without an evidence span: "
-                      f"{', '.join(f'[{n}]' for n in unquoted)}",
-        })
+        findings.append(
+            {
+                "code": "citation_unquoted",
+                "detail": f"cited without an evidence span: "
+                f"{', '.join(f'[{n}]' for n in unquoted)}",
+            }
+        )
 
     # The answer reproducing the fence means the model is describing the prompt's
     # structure back to the caller, which is what a successful injection looks
     # like from out here.
     if marker_shaped(folded):
-        findings.append({
-            "code": "fence_echoed",
-            "detail": "the answer reproduced an untrusted-content marker",
-        })
+        findings.append(
+            {
+                "code": "fence_echoed",
+                "detail": "the answer reproduced an untrusted-content marker",
+            }
+        )
 
     if SYSTEM_CANARY in folded:
-        findings.append({
-            "code": "system_prompt_echoed",
-            "detail": "the answer repeated part of the system prompt",
-        })
+        findings.append(
+            {
+                "code": "system_prompt_echoed",
+                "detail": "the answer repeated part of the system prompt",
+            }
+        )
 
     urls = _MD_IMAGE.findall(folded)
     if urls:
-        findings.append({
-            "code": "markdown_image",
-            "detail": f"answer embedded {len(urls)} image URL(s): {urls[0]}",
-        })
+        findings.append(
+            {
+                "code": "markdown_image",
+                "detail": f"answer embedded {len(urls)} image URL(s): {urls[0]}",
+            }
+        )
     links = _MD_LINK.findall(folded)
     if links:
-        findings.append({
-            "code": "markdown_link",
-            "detail": f"answer embedded {len(links)} link URL(s): {links[0]}",
-        })
+        findings.append(
+            {
+                "code": "markdown_link",
+                "detail": f"answer embedded {len(links)} link URL(s): {links[0]}",
+            }
+        )
 
     return findings

@@ -83,17 +83,26 @@ def sync_documents(
                 continue
 
             pii_types = pii.detect_types(content)
-            doc = require_row(conn.execute(
-                "insert into documents(org_id, source, path, content, content_hash, acl, pii_types, status)"
-                " values (%s, %s, %s, %s, %s, %s, %s, 'pending')"
-                " on conflict (org_id, source, path) do update set"
-                " content = excluded.content, content_hash = excluded.content_hash,"
-                " acl = excluded.acl, pii_types = excluded.pii_types,"
-                " status = 'pending', updated_at = now()"
-                " returning id, revision",
-                (org_id, source, item["path"], content, content_hash, Json(acl),
-                 Json(pii_types)),
-            ).fetchone())
+            doc = require_row(
+                conn.execute(
+                    "insert into documents(org_id, source, path, content, content_hash, acl, pii_types, status)"
+                    " values (%s, %s, %s, %s, %s, %s, %s, 'pending')"
+                    " on conflict (org_id, source, path) do update set"
+                    " content = excluded.content, content_hash = excluded.content_hash,"
+                    " acl = excluded.acl, pii_types = excluded.pii_types,"
+                    " status = 'pending', updated_at = now()"
+                    " returning id, revision",
+                    (
+                        org_id,
+                        source,
+                        item["path"],
+                        content,
+                        content_hash,
+                        Json(acl),
+                        Json(pii_types),
+                    ),
+                ).fetchone()
+            )
             enqueued += 1
             # Enqueue after the row is committed by the surrounding block. The
             # key includes the hash so a re-upload of identical bytes is a no-op,
@@ -140,8 +149,7 @@ def process_ingest_document(org_id: str, payload: dict[str, Any]) -> None:
     document_id = payload["document_id"]
     with connect(org_id) as conn:
         doc = conn.execute(
-            "select id, content, status, acl from documents"
-            " where id = %s and org_id = %s",
+            "select id, content, status, acl from documents" " where id = %s and org_id = %s",
             (document_id, org_id),
         ).fetchone()
     if doc is None or doc["status"] == "deleted":

@@ -39,8 +39,13 @@ def enqueue(
             "insert into jobs(org_id, kind, payload, idempotency_key, max_attempts)"
             " values (%s, %s, %s, %s, %s)"
             " on conflict (idempotency_key) do nothing returning id",
-            (org_id, kind, Json(payload), idempotency_key,
-             max_attempts or settings.job_max_attempts),
+            (
+                org_id,
+                kind,
+                Json(payload),
+                idempotency_key,
+                max_attempts or settings.job_max_attempts,
+            ),
         ).fetchone()
     return row is not None
 
@@ -71,7 +76,7 @@ def mark_succeeded(job_id: str) -> None:
 
 
 def _backoff_seconds(attempts: int) -> int:
-    return min(300, 2 ** attempts)
+    return min(300, 2**attempts)
 
 
 def mark_failed(job_id: str, error: str, backoff_seconds: int | None = None) -> str:

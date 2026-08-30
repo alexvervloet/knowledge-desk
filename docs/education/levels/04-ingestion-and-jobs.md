@@ -65,7 +65,7 @@ nothing: no chunking, no embedding, no API call. On a corpus that mostly does no
 change, a nightly sync is close to free.
 
 The queue is a Postgres table. No Redis, no RabbitMQ, no Celery. The claim is one
-statement, in [jobs.py:48-61](../../../knowledge_desk/jobs.py#L48-L61 "claim_one"):
+statement, in [jobs.py:53-66](../../../knowledge_desk/jobs.py#L53-L66 "claim_one"):
 
 ```sql
 update jobs set status = 'running', attempts = attempts + 1, updated_at = now()

@@ -9,7 +9,12 @@ import os
 import sys
 
 DIM, BOLD, CYAN, GREEN, YELLOW, RESET = (
-    "\033[2m", "\033[1m", "\033[36m", "\033[32m", "\033[33m", "\033[0m",
+    "\033[2m",
+    "\033[1m",
+    "\033[36m",
+    "\033[32m",
+    "\033[33m",
+    "\033[0m",
 )
 WIDTH = 74
 
@@ -54,8 +59,10 @@ def main() -> int:
     for text in lines:
         print(f"  {GREEN}{text}{RESET}")
 
-    print(f"  {DIM}claude · {usage.get('input_tokens')} in / "
-          f"{usage.get('output_tokens')} out · ${cost:.4f}{RESET}")
+    print(
+        f"  {DIM}claude · {usage.get('input_tokens')} in / "
+        f"{usage.get('output_tokens')} out · ${cost:.4f}{RESET}"
+    )
     return 0
 
 

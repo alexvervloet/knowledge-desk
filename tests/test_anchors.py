@@ -83,7 +83,7 @@ def test_a_moved_symbol_is_caught(repo):
 def test_fix_repoints_a_moved_symbol_and_its_link_text(repo):
     write(repo, link(3, 5, "alpha"))
     anchors.run(fix=True, adopt=False, tidy=False)
-    assert "[mod.py:8-10](knowledge_desk/mod.py#L8-L10 \"alpha\")" in page(repo)
+    assert '[mod.py:8-10](knowledge_desk/mod.py#L8-L10 "alpha")' in page(repo)
 
 
 def test_an_unknown_symbol_is_reported_rather_than_ignored(repo):
@@ -97,7 +97,7 @@ def test_link_text_disagreeing_with_its_own_anchor_is_caught_without_a_title(rep
 
 
 def test_a_boundary_on_a_blank_line_is_caught_without_a_title(repo):
-    write(repo, link(8, 11))          # line 11 is blank
+    write(repo, link(8, 11))  # line 11 is blank
     assert anchors.run(fix=False, adopt=False, tidy=False) == 1
 
 
@@ -111,8 +111,8 @@ def test_adopt_records_a_symbol_only_on_an_exact_match(repo):
     write(repo, link(8, 10) + link(8, 9))
     anchors.run(fix=False, adopt=True, tidy=False)
     body = page(repo)
-    assert '#L8-L10 "alpha"' in body      # exact span, adopted
-    assert '#L8-L9)' in body              # partial span, left alone
+    assert '#L8-L10 "alpha"' in body  # exact span, adopted
+    assert "#L8-L9)" in body  # partial span, left alone
 
 
 def test_a_single_line_symbol_does_not_report_forever(repo):

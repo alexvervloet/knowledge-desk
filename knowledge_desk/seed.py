@@ -23,8 +23,14 @@ _ORGS: list[dict[str, Any]] = [
         "name": "Acme Corp",
         "owner": "owner@acme.test",
         "documents": [
-            {"path": "handbook.md", "content": "Acme refunds are processed within five business days of the request."},
-            {"path": "security.md", "content": "Acme rotates all production API keys every 90 days and stores them in a vault."},
+            {
+                "path": "handbook.md",
+                "content": "Acme refunds are processed within five business days of the request.",
+            },
+            {
+                "path": "security.md",
+                "content": "Acme rotates all production API keys every 90 days and stores them in a vault.",
+            },
         ],
     },
     {
@@ -32,8 +38,14 @@ _ORGS: list[dict[str, Any]] = [
         "name": "Globex Inc",
         "owner": "owner@globex.test",
         "documents": [
-            {"path": "products.md", "content": "Globex manufactures industrial widgets and ships them worldwide."},
-            {"path": "onboarding.md", "content": "Globex new hires complete orientation during their first week."},
+            {
+                "path": "products.md",
+                "content": "Globex manufactures industrial widgets and ships them worldwide.",
+            },
+            {
+                "path": "onboarding.md",
+                "content": "Globex new hires complete orientation during their first week.",
+            },
         ],
     },
 ]
