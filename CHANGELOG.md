@@ -12,6 +12,47 @@ do, not merely a change to security-adjacent code.
 The migration files carry phase numbers in their comments as a record of when
 each was written. The sections below name which phases those were.
 
+## 2026-08-30 — Six gaps in the static analysis, closed
+
+An audit of what CI actually enforced. Ruff and mypy were doing real work; the
+frontend had no linter, nothing scanned for secrets, and nobody knew what the
+212 tests reached.
+
+### Security
+
+- Secret scanning with gitleaks, as a hard gate rather than an advisory one. The
+  job takes the full history instead of the shallow checkout, so a key added and
+  reverted inside a branch is still caught. All 311 commits scan in under a
+  second and came back clean.
+- Ruff's flake8-bandit rules (`S`) are on. Six findings, all benign, now carry a
+  `noqa` recording why: two on `check_links.py`'s fixed-argv git call, three on
+  seeded generators that must stay deterministic, one on the demo seed password.
+  Tests ignore the assert and fixture-password rules, which would bury the rest.
+
+### Added
+
+- oxlint on the frontend, with type-aware rules and `react-hooks`. ESLint could
+  not be used: typescript-eslint hard-refuses TypeScript 7, and its workaround is
+  a second TypeScript installed alongside purely to lint. oxlint parses TS itself
+  and takes type information from `oxlint-tsgolint`, which tracks the TS 7
+  compiler. It found four unawaited promises in mount effects and a `setState`
+  the App could decide before its first render.
+- Coverage measurement with a floor of 85%. The measured figure is 88%, once
+  `bench.py` is excluded as the developer harness it is. `worker.py` at 0%,
+  `migrate.py` at 70%, and `tracing.py` at 73% are where the gap is.
+- `ruff format --check` in CI. Formatting had never been enforced, and 33 of 53
+  files had drifted.
+
+### Changed
+
+- mypy runs in strict mode. The previous settings were a documented compromise
+  from a codebase not written mypy-first, and the remaining distance turned out
+  to be 33 errors in 9 files: bare `dict` returns on the handlers, four
+  unannotated functions, and `count(*)` coming back as `Any` through `DictRow`.
+
+The dependency audits stay advisory on purpose. That was a considered choice
+when they were added and the reasoning has not changed.
+
 ## 2026-08-30 — Citation evidence, and anchors that resolve to symbols
 
 The last open security item, plus the tooling for a docs problem that had cost
