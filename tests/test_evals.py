@@ -28,3 +28,8 @@ def test_prompt_injection_eval_passes():
 def test_path_injection_eval_passes():
     result = evals.path_injection_eval()
     assert result["passed"], result["detail"]
+
+
+def test_fence_integrity_eval_passes():
+    result = evals.fence_integrity_eval()
+    assert result["passed"], result["detail"]
