@@ -290,8 +290,15 @@ def output_check_eval() -> dict[str, Any]:
     done = [e for e in events if e["type"] == "done"]
     frame_carries_warnings = bool(done) and "warnings" in done[0]
 
-    contexts = [{"path": "a.txt", "text": "one"}, {"path": "b.txt", "text": "two"}]
-    clean = check_answer("Refunds take five days [1], per the handbook [2].", contexts)
+    contexts = [{"path": "a.txt", "text": "Refunds take five business days."},
+                {"path": "b.txt", "text": "Parental leave accrues from the start."}]
+    clean = check_answer(
+        'Refunds take five days [1] "refunds take five business days", and'
+        ' leave accrues [2] "parental leave accrues from the start".', contexts)
+    # Right key, real-looking text, not in the passage: the case citation
+    # existence cannot see, because the key it names is genuine.
+    detached = {f["code"] for f in check_answer(
+        '[1] "refunds are instant and unconditional".', contexts)}
     # A citation the retrieval never issued, and the prompt's own fence coming
     # back out, the second spelled with a Cyrillic O so the check cannot be one
     # that reads raw bytes.
@@ -301,10 +308,12 @@ def output_check_eval() -> dict[str, Any]:
     caught = hostile == {"citation_out_of_range", "fence_echoed"}
     quiet_when_clean = clean == []
 
-    passed = frame_carries_warnings and caught and quiet_when_clean
+    pins_quotes = detached == {"citation_unsupported"}
+    passed = frame_carries_warnings and caught and quiet_when_clean and pins_quotes
     return {"name": "output-checks", "passed": passed,
             "detail": f"frame_carries_warnings={frame_carries_warnings}"
-                      f" caught={sorted(hostile)} quiet_when_clean={quiet_when_clean}"}
+                      f" caught={sorted(hostile)} quiet_when_clean={quiet_when_clean}"
+                      f" pins_quotes={pins_quotes}"}
 
 
 def run_all() -> list[dict[str, Any]]:

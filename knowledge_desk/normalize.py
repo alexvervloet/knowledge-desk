@@ -45,6 +45,10 @@ _LOOKALIKES = {
     # Punctuation that shows up in marker forgery.
     "＜": "<", "＞": ">", "／": "/", "＿": "_", "－": "-", "‐": "-", "‑": "-",
     "–": "-", "—": "-", "﹘": "-",
+    # Curly quotes, so a quoted evidence span parses whichever pair the model
+    # reaches for.
+    "\u201c": '"', "\u201d": '"', "\u201e": '"', "\u2033": '"',
+    "\u2018": "'", "\u2019": "'", "\u201a": "'",
 }
 
 # Characters that render as nothing and exist to break a string comparison. The
