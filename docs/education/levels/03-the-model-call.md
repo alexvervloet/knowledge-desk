@@ -108,14 +108,25 @@ Rendering, at
 security work happens:
 
 ```python
-f"[{i + 1}] ({c['path']})\n{_DOC_OPEN}\n{_neutralize(c['text'])}\n{_DOC_CLOSE}"
+open_tag, close_tag = fence_tags(nonce)
+f"[{i + 1}]\n{open_tag}\npath: {_neutralize(c['path'])}\n"
+f"{_neutralize(c['text'])}\n{close_tag}"
 ```
 
-`_neutralize` replaces any occurrence of the open or close marker inside the
-document with `<<<>>>`. Compare this to escaping quotes when building a string,
-and then notice what is different: escaping a quote is complete, because a parser
-with fixed grammar reads the result. Here the reader is a model, and "it will
-respect the fence" is a strong empirical tendency, not a theorem.
+The markers carry a nonce minted for the request. That is what makes them a
+boundary rather than a convention: an attacker writes their document today and it
+gets retrieved next week, so the one thing they cannot put in it is a value that
+did not exist when they wrote it. `_neutralize` is the second layer, defusing
+runs of text merely *shaped* like a marker, because a model is a fuzzy reader and
+will honour a close marker that is close enough.
+
+Everything the uploader supplied sits inside the fence, path included. Only the
+`[n]` label stays outside, because that is a number this system minted.
+
+Compare this to escaping quotes when building a string, and then notice what is
+different: escaping a quote is complete, because a parser with fixed grammar
+reads the result. Here the reader is a model, and "it will respect the fence" is
+a strong empirical tendency, not a theorem.
 
 Streaming. The answer arrives token by token. The API turns each token event into
 a Server Sent Events frame, in [main.py:328-350](../../../knowledge_desk/main.py#L332-L354),
@@ -163,9 +174,9 @@ it. Not sufficient alone.
 Explicit delimiters give the boundary a physical location in the token stream.
 Useful for the same reason.
 
-`_neutralize` removes the attacker's ability to forge those delimiters. This is
-the only part that is a real, deterministic control, and it is three lines. It
-does not stop injection. It stops the specific escalation where a document
+The per-request nonce removes the attacker's ability to forge those delimiters.
+This is the only part that is a real, deterministic control. It does not stop
+injection. It stops the specific escalation where a document
 appears to close the untrusted block and continue as system text, which is the
 difference between "the model was asked nicely to misbehave" and "the model was
 handed something that structurally looked like an instruction".
@@ -265,25 +276,30 @@ because it is a cost and latency decision baked into a call site: a grounded
 extraction over five short passages does not need much reasoning effort, and
 paying for it would be paying for nothing on every request.
 
-The neutralisation is deliberately blunt: replace both markers with `<<<>>>`. Not
-escaped, not encoded, destroyed. That is the right call for a defense whose reader
-is a model. A reversible escape would give the model something to helpfully undo,
+The neutralisation is deliberately blunt: replace a marker-shaped run with
+`[marker removed]`. Not escaped, not encoded, destroyed, but leaving a trace that
+something was there. That is the right call for a defense whose reader is a
+model. A reversible escape would give the model something to helpfully undo,
 which sounds absurd until you have watched a model unescape your escaping because
-it inferred that was what you meant.
+it inferred that was what you meant. Leaving the marker in the count of what was
+removed is what an incident review needs.
 
-Where I think the defense is thinner than it reads:
+Two things this section used to list as thinner than they read, both now closed,
+and worth keeping visible because the shape of each is more general than the fix:
 
-The system prompt does a lot of work and the delimiters are static strings. A
-sufficiently determined document does not need to forge `<<<UNTRUSTED_DOCUMENT>>>`
-to be effective. Randomising the delimiter per request, so the attacker cannot
-know the token at authoring time, costs nothing and removes the entire class of
-forgery rather than a specific string match. I would take that change.
+The delimiters were static strings, and a static delimiter is one the attacker
+can simply type. They are per-request now. Note what the fix did *not* need: no
+model cooperation, no detection, no guess about intent. That is the difference
+between a control and a request.
 
-`_neutralize` runs on `c['text']` but the path is interpolated unescaped into the
-same line as `[{i+1}] ({c['path']})`. Paths are user-supplied at upload. A path
-containing a newline and something that looks like a passage header is a smaller
-version of the same attack, arriving through a field nobody thought of as
-content. Worth a look.
+`_neutralize` ran on `c['text']` while the path was interpolated raw onto the
+citation line, outside the fence. A field nobody thought of as content, arriving
+through the one region a fence cannot cover. The path is inside the fence now,
+and the general form of the rule has a check of its own: `unfenced_untrusted`
+asks which uploader-supplied values appear outside the markers, and gates the
+property rather than the two fields that happen to have evals.
+
+What remains thinner than it reads:
 
 There is no output-side check at all. Nothing verifies that a cited `[n]` exists,
 that the answer's claims appear in the cited passage, or that the answer does not
