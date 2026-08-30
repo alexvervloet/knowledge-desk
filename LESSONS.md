@@ -830,3 +830,60 @@ rather than something a later reader has to guess was deliberate.
 Takeaway: name a control by what it actually does, early, because the name drives
 the design. A "gate" that cannot block would have produced a worse module and a
 more confident one.
+
+## 40. A checker that cannot go green is a checker people delete
+
+`scripts/anchors.py` resolves each doc line anchor against the symbol it names.
+The first working version reported drift on `auth.py#L21` forever: `ROLE_RANK` is
+one line, the link had no end, and comparing `(21, None)` against `(21, 21)` said
+they differed. `--fix` then rewrote the link to exactly what it already was, so
+every run reported a problem and every repair was a no-op.
+
+The bug is trivial. What it would have cost is not. A gate that fails on a
+correct repository, and cannot be made to pass, gets removed from CI within a
+week, and the removal looks reasonable at the time. That is a worse outcome than
+never having written it, because the reasoning that produced it goes too.
+
+Takeaway: the first test of a new checker is not "does it catch the bad case" but
+"can the good case be made to pass". Run it against a clean tree and require
+silence before trusting anything it says about a dirty one.
+
+## 41. Automating a judgment call quietly made the wrong call
+
+The anchor tool adopts a symbol title only where a range matches that symbol
+exactly, which leaves a long tail of links that point at part of a function, or
+at a comment above one. Those need a human. So I hand-adopted a batch by matching
+on the module and the starting line.
+
+One of them was exercise 2's "read the whole defense first" pointer, a range
+deliberately spanning four symbols from `_SYSTEM` to `unfenced_untrusted`. It
+starts on the same line `_SYSTEM` does, so the batch labelled it `_SYSTEM`, and
+`--fix` obediently shrank a 220-line reference to 20. The tool did exactly what it
+was told and the instruction was wrong.
+
+It was caught by reading the diff, which is the only thing that would have caught
+it. The narrow automatic rule was right to be narrow; the mistake was replacing
+the judgment it declined to make with a cruder rule of my own and not checking
+the result as carefully as I would have checked a hand edit.
+
+Takeaway: when a tool deliberately refuses to guess, that refusal is the design.
+Reaching around it with a looser heuristic gives back the safety the narrow rule
+bought, and it does so in a batch, where a single wrong call is easy to miss.
+That link now carries a comment saying why it has no title.
+
+## 42. Three findings the review made, the docs had already written down
+
+Worth stating once, at the end. The critique sections in `docs/education/levels/`
+had already named the per-request nonce, the unescaped path, and the missing
+output-side citation check, each under "where I think the defense is thinner than
+it reads". All three were later found again by reading the code, fixed, and
+written up as discoveries.
+
+The pattern across entries 36 and 41 and this one is the same: a weakness
+recorded in prose, in a document whose job is teaching, is indistinguishable from
+a weakness nobody has noticed. Nothing links it to code, nothing fails while it
+stands, and the next reader takes it as considered and therefore settled. The
+`anchors.py` title is the first thing in this repository that turns a claim about
+code into something CI can falsify, and the shape generalises: if a document
+asserts something about the code, find the assertion a machine can check and
+write that down next to the prose.
