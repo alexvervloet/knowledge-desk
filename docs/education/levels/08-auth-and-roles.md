@@ -33,7 +33,7 @@ nothing to compare against, so it gives up right away. If the account does exist
 the program runs slow bcrypt and takes a quarter of a second. The message is the
 same. The timing is not. Four milliseconds means no account, 240 milliseconds
 means there is one. That measured difference is real, it is in the code comment
-at [auth.py:41-52](../../../knowledge_desk/auth.py#L41-L52), and it lets somebody
+at [auth.py:40-51](../../../knowledge_desk/auth.py#L40-L51 "dummy_hash"), and it lets somebody
 build a list of who works at the company.
 
 The fix is small and slightly funny. When there is no such user, the program

@@ -65,7 +65,7 @@ nothing: no chunking, no embedding, no API call. On a corpus that mostly does no
 change, a nightly sync is close to free.
 
 The queue is a Postgres table. No Redis, no RabbitMQ, no Celery. The claim is one
-statement, in [jobs.py:48-63](../../../knowledge_desk/jobs.py#L48-L63):
+statement, in [jobs.py:48-61](../../../knowledge_desk/jobs.py#L48-L61 "claim_one"):
 
 ```sql
 update jobs set status = 'running', attempts = attempts + 1, updated_at = now()
@@ -111,13 +111,13 @@ The parts specific to an embedding pipeline, rather than to queues in general.
 
 Ingestion is where money is spent per byte. Embedding is a paid API call
 proportional to corpus size, so the hash check at
-[ingest.py:66-76](../../../knowledge_desk/ingest.py#L66-L76) is not a tidiness
+[ingest.py:66-75](../../../knowledge_desk/ingest.py#L66-L75) is not a tidiness
 feature, it is the difference between a sync that costs nothing and a sync that
 re-embeds a 50,000 chunk corpus every night. Any RAG system without content-hash
 change detection is quietly burning money on a schedule.
 
 The `zip(texts, embeddings, strict=True)` at
-[ingest.py:152-156](../../../knowledge_desk/ingest.py#L152-L156) deserves the
+[ingest.py:153-156](../../../knowledge_desk/ingest.py#L153-L156) deserves the
 comment it has. Without `strict`, a short embedding list truncates silently, the
 document is marked ingested holding a subset of its chunks, and you have a
 permanent invisible hole in retrieval for that document. Nothing downstream would

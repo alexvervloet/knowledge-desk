@@ -12,7 +12,7 @@ codebase, and only one of them is engineering.
 | Chunking | fixed character windows with overlap ([chunking.py](../../knowledge_desk/chunking.py)) | `chunk_size: 1000`, `chunk_overlap: 150` |
 | Embedding | Voyage `voyage-3`, 1024 dims, or a deterministic mock ([embeddings.py](../../knowledge_desk/embeddings.py)) | `embed_model` |
 | Index | none — exact scan with cosine distance | see below |
-| Query | embed, ACL-filtered nearest neighbours ([tenancy.py:383-404](../../knowledge_desk/tenancy.py#L383-L404)) | `retrieval_k: 6` |
+| Query | embed, ACL-filtered nearest neighbours ([tenancy.py:383-404](../../knowledge_desk/tenancy.py#L383-L404 "TenantScope.search")) | `retrieval_k: 6` |
 | Rerank | none | |
 | Threshold | none | |
 

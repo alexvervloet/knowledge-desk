@@ -56,7 +56,7 @@ by client address. The second is tighter on purpose, because those are the only
 endpoints an anonymous caller can reach and each one costs a bcrypt verification.
 
 Budget checks, in
-[assistant.py:35-47](../../../knowledge_desk/assistant.py#L35-L47):
+[assistant.py:35-47](../../../knowledge_desk/assistant.py#L35-L47 "_limit_block"):
 
 ```python
 def _limit_block(scope):

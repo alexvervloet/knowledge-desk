@@ -71,7 +71,7 @@ stopped reading. Left unbilled, aborting every request just before the end is
 free inference. The fix is in
 [assistant.py:157-171](../../knowledge_desk/assistant.py#L157-L171) — book an
 estimate, flagged as estimated. Spend is capped *before* the model runs
-([assistant.py:35-47](../../knowledge_desk/assistant.py#L35-L47)), because a cap you
+([assistant.py:35-47](../../knowledge_desk/assistant.py#L35-L47 "_limit_block")), because a cap you
 check afterwards is an invoice.
 
 **4. Retrieval turns an access-control question into a ranking question.**
@@ -84,7 +84,7 @@ cheerfully summarises a document the asker cannot open.
 
 The rule this project follows: **filter inside the candidate fetch, never
 after.** The ACL predicate sits in the same SQL that ranks
-([tenancy.py:383-404](../../knowledge_desk/tenancy.py#L383-L404)), so a forbidden
+([tenancy.py:383-404](../../knowledge_desk/tenancy.py#L383-L404 "TenantScope.search")), so a forbidden
 chunk is never scored, never ranked, and cannot survive a forgotten post-filter.
 A post-filter also silently returns fewer than `k` results, which looks like bad
 retrieval rather than a security design.

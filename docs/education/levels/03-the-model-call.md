@@ -100,7 +100,7 @@ gets a nice answer, and does not realise nothing was called. Making the fake
 obviously fake is worth more than making it realistic.
 
 The prompt has two parts. The system prompt, `_SYSTEM` at
-[providers.py:30-49](../../../knowledge_desk/providers.py#L30-L49), carries both
+[providers.py:30-53](../../../knowledge_desk/providers.py#L30-L53 "_SYSTEM"), carries both
 rules: answer only from context and cite by number, and treat the context as
 untrusted data rather than instructions. The user message is the rendered
 passages plus the question.
@@ -131,7 +131,7 @@ reads the result. Here the reader is a model, and "it will respect the fence" is
 a strong empirical tendency, not a theorem.
 
 Streaming. The answer arrives token by token. The API turns each token event into
-a Server Sent Events frame, in [main.py:332-354](../../../knowledge_desk/main.py#L332-L354),
+a Server Sent Events frame, in [main.py:332-354](../../../knowledge_desk/main.py#L332-L354 "ask"),
 which is a long-lived HTTP response where the server writes `data: ...` lines as
 they become available. The browser reads them as they arrive. The reason to
 bother is entirely perceived latency: a four second wait with text appearing

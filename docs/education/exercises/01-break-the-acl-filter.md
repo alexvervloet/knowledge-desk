@@ -110,7 +110,7 @@ in a way that will cost you a week when it eventually bites:
   test that exists.
 
 The real query keeps the filter and the ranking together
-([tenancy.py:383-404](../../../knowledge_desk/tenancy.py#L383-L404)), so `k` means
+([tenancy.py:383-404](../../../knowledge_desk/tenancy.py#L383-L404 "TenantScope.search")), so `k` means
 what it says and there is no window in which forbidden text exists in memory.
 Getting there needed a schema change: the ACL is denormalised onto the chunk row
 so the predicate and the vector live on the same relation, because a filter on

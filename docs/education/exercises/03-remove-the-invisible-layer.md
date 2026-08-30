@@ -29,7 +29,7 @@ Two pieces, and the second is where this exercise lives.
 policy that compares the row's `org_id` against a session variable
 ([migrations/0007_rls.sql:32-34](../../../migrations/0007_rls.sql#L32-L34)). The
 application sets that variable per transaction
-([db.py:1-16](../../../knowledge_desk/db.py#L1-L16)). No variable set means no rows
+([db.py:1-15](../../../knowledge_desk/db.py#L1-L15)). No variable set means no rows
 match, so the default is deny.
 
 **The role.** Postgres does not apply RLS policies to a superuser, to a table's

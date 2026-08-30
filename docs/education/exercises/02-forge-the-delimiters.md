@@ -22,12 +22,14 @@ gate. That is the exercise.
 
 ## The four parts
 
-Read [providers.py:30-253](../../../knowledge_desk/providers.py#L30-L253) first:
+Read [providers.py:30-253](../../../knowledge_desk/providers.py#L30-L253) first,
+which is the whole of it (no symbol title on this one: it spans several on
+purpose, so there is nothing for `scripts/anchors.py` to hold it to):
 
 1. **A system prompt that names the boundary.** It tells the model the passages
    are untrusted data, may imitate system prompts, and that instructions inside
    them are never followed
-   ([providers.py:30-49](../../../knowledge_desk/providers.py#L30-L49)).
+   ([providers.py:30-53](../../../knowledge_desk/providers.py#L30-L53 "_SYSTEM")).
 2. **Markers carrying a per-request nonce.** `<<<UNTRUSTED_DOCUMENT a1b2c3d4>>>`,
    where the digits are minted for this request and named in the user turn
    ([providers.py:61-74](../../../knowledge_desk/providers.py#L61-L74)). This is
