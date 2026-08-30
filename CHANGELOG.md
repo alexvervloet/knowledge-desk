@@ -12,6 +12,47 @@ do, not merely a change to security-adjacent code.
 The migration files carry phase numbers in their comments as a record of when
 each was written. The sections below name which phases those were.
 
+## 2026-08-30 — Grammar defusing, folding, and output checks
+
+The four gaps the previous two entries named and left open, closed. Same sources:
+the DeepDives prompt-injection and GenAI-security chapters.
+
+### Security
+
+- An empty ACL denies instead of defaulting to the whole org. `acl = item.get("acl")
+  or DEFAULT_ACL` cannot distinguish an absent ACL from an empty one, so an upload
+  naming `[]` was handed `["public-to-org"]`. The request asking for the tightest
+  permission available got the loosest. Absent still takes the default; empty is
+  stored as given and matches no principal.
+- Defuse the prompt's whole grammar, not only the fence markers. A passage
+  containing `[2]` could attribute its own claims to a real passage the asker was
+  allowed to see, and a citation check validates that because the key exists. A
+  `path:` line inside the fence forged our own label. Both are defused; the cost
+  is that genuine footnote markers in a document go with them.
+- Match after folding. A Cyrillic О or a zero-width space spells a marker that
+  reads identically and compares unequal, and every marker pattern was reading
+  raw bytes. Replacement still lands on the original text through an offset map,
+  so the document handed to the model is the document that was uploaded.
+- Paths reject invisible characters as well as control characters.
+
+### Added
+
+- `outputchecks.check_answer`: citations outside the retrieved range, the fence
+  coming back out of the model, the system prompt repeated, and markdown images
+  or links. Detectors rather than a gate, because the answer streams; findings
+  ride out in the `done` frame and land in the audit log. A bare URL in prose is
+  deliberately not detected, and a test asserts that so the omission stays a
+  decision rather than an oversight.
+- The number of grammar forgeries defused per question is written to the audit
+  log. A corpus where that is nonzero and rising is one somebody is writing into,
+  and nothing else here would surface it.
+- An `output-checks` eval, and tests for the folding and its offset map.
+
+### Changed
+
+- The `done` SSE frame carries a `warnings` array, and the UI shows it under the
+  answer.
+
 ## 2026-08-30 — Per-request fence around retrieved passages
 
 Follow-on to the review above, applying two controls the
