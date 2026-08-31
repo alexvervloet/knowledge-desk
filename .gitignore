@@ -20,3 +20,6 @@ uploads/
 
 # OS / editor
 .DS_Store
+
+# Local notes, not part of the repo
+docs/education/

@@ -37,39 +37,6 @@ narrated trip through the app end to end (branch points, gotchas, and what it is
 and is not good at), [LESSONS.md](LESSONS.md) for what the build taught,
 including the mistakes, and [CHANGELOG.md](CHANGELOG.md) for what changed when.
 
-## Learning from this project
-
-**→ [docs/education/](docs/education/) is a course built out of this system**, for engineers who can
-code but have not shipped an LLM application. It runs keyless, so you need no API
-keys to work through it.
-
-It starts from an uncomfortable ratio: the part a tutorial would call "the RAG"
-is 129 lines of the 3,789 here. The other 97% is what the
-[thesis](docs/education/01-thesis.md) argues is the actual job — access-controlled
-retrieval, tenant isolation, injection defense, cost ceilings, and evals that
-block a merge.
-
-The centre of it is four [exercises](docs/education/exercises/) that break a safety
-property on purpose and show you what catches it:
-
-| Exercise | You learn |
-|---|---|
-| [Break the ACL filter](docs/education/exercises/01-break-the-acl-filter.md) | Why the permission check belongs inside the ranking query, not after it |
-| [Forge the delimiters](docs/education/exercises/02-forge-the-delimiters.md) | How an uploaded document attacks your prompt, and what a real boundary costs |
-| [Remove the invisible layer](docs/education/exercises/03-remove-the-invisible-layer.md) | That deleting a security layer is **undetectable from behaviour** — every eval still passes |
-| [Spend without a ceiling](docs/education/exercises/04-spend-without-a-ceiling.md) | Why per-tenant caps bound nothing when signup is open |
-
-Also: [evals as a merge gate](docs/education/03-evals.md), [what the retrieval core
-deliberately omits](docs/education/04-rag-core.md), and [how to read the build
-history](docs/education/05-reading-the-history.md) — 200+ commits and 29 written-up
-mistakes.
-
-And [docs/education/levels/](docs/education/levels/), which explains every concept in the system five
-times over, to five readers: a high school intro-to-CS student, a second-year
-undergraduate, a CS graduate learning AI, an engineering manager interviewing for
-an AI engineering job, and a senior AI engineer. Same code, same line references,
-five different conversations.
-
 ## Architecture
 
 Ingestion is asynchronous, so embedding never blocks a request. Asking is
