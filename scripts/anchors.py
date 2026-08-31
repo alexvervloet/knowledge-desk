@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Check and repair the line anchors in the education docs.
+"""Check and repair the line anchors in the Markdown docs.
 
 The docs promise the same code at the same line references, and nothing keeps
 that promise. `check_links.py` resolves link *targets*, so
