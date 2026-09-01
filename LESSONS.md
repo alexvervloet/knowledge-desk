@@ -949,3 +949,37 @@ whatever the row holds. Here it held an email address and a password hash.
 anchors the education docs point at. Same trap as entry 43, and the same
 one-line repair: run `scripts/anchors.py --fix` after any edit that moves code,
 not only after a reformat.
+
+## 45. Two settings that only looked like settings
+
+Both found the same way: by another project trying to use this one as a library
+and pointing it at a model nobody here had tried.
+
+**`answer_model` accepted any model and worked for one family.** The provider
+sent `output_config={"effort": "low"}` on every request. Haiku 4.5 rejects that
+parameter outright, so setting `answer_model` to Haiku did not degrade the
+answer, it failed every one of them. A setting whose valid range is undocumented
+and unenforced is a setting that works until somebody uses it.
+
+**The pricing table had a stale rate and a silent fallback.** Sonnet 5 was
+priced 50% high, and any model missing from the table was billed at Opus rates
+without a word. These are not display numbers: `finalize_answer` writes them to
+the column the per-org rolling budget and the platform daily cap are summed
+from, so a Sonnet org's real budget was a third smaller than the figure in its
+settings, and an unlisted model's budget was whatever the accident produced.
+
+**What connects them.** Both are the same shape: a value the operator can
+change, surrounded by code that assumed one value. The model id was
+parameterised; the request shape, the price, and the capability were not. When
+something becomes configurable, everything that depends on it becomes part of
+its contract, and the parts nobody parameterised are the ones that break.
+
+**What to do differently.** For each setting, ask what the code around it
+assumes and whether anything checks that assumption. A capability table with a
+loud fallback is cheap. So is a test asserting the tables carry the same keys,
+which is the only reason the next model added will not repeat this.
+
+**And the practical one.** Both fixes came out of a sibling repo sharing this
+project's Postgres. Running this repo's test suite truncates that database, so
+the other project's corpus vanishes mid-session. Nothing is wrong with either
+repo; two things share one database and only one of them knows it.
