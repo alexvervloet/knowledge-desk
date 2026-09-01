@@ -12,6 +12,24 @@ do, not merely a change to security-adjacent code.
 The migration files carry phase numbers in their comments as a record of when
 each was written. The sections below name which phases those were.
 
+## 2026-09-01 — `answer_model` was configurable in name only
+
+### Fixed
+
+- `ClaudeAnswerProvider.stream` sent `output_config={"effort": "low"}` on every
+  request. Claude Haiku 4.5 rejects that parameter with a 400, so setting
+  `answer_model` to Haiku made every single answer fail. The model was a
+  setting; the request shape around it was not.
+- `_supports_effort` now decides per model, from a table beside `_PRICING`. A
+  model with no recorded capability is sent without the parameter and logs a
+  warning: omitting it costs some tuning, sending it where it is rejected costs
+  every answer, and given an unknown model the survivable failure is the better
+  one. A test asserts the two tables carry the same models, because they drift
+  apart silently otherwise.
+
+Verified against the live API on both sides: Haiku returns a 400 with the
+parameter and a correct cited answer without it.
+
 ## 2026-09-01 — Model pricing was wrong, and wrong silently
 
 Found while building model-swap, which compares what the same workload costs on
