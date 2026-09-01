@@ -34,6 +34,16 @@ _PRICING = {
     "claude-haiku-4-5": (1.0, 5.0),
 }
 
+# Which models accept `output_config.effort`. Haiku 4.5 rejects it outright
+# with a 400, so sending it unconditionally makes `answer_model` configurable
+# in name only: set it to Haiku and every answer fails.
+_SUPPORTS_EFFORT = {
+    "claude-opus-5": True,
+    "claude-opus-4-8": True,
+    "claude-sonnet-5": True,
+    "claude-haiku-4-5": False,
+}
+
 # What an unpriced model is charged at. The most expensive rate we know, so an
 # unlisted model over-counts against a budget rather than under-counting: a
 # customer stopped early can ask, while one who overspent has already spent it.
@@ -171,6 +181,25 @@ def count_defused(contexts: list[dict[str, Any]]) -> int:
     return sum(
         _defuse(str(c.get("path", "")))[1] + _defuse(str(c.get("text", "")))[1] for c in contexts
     )
+
+
+def _supports_effort(model: str) -> bool:
+    """Whether to send `output_config.effort` for this model.
+
+    Unknown models are treated as not supporting it, and say so. Omitting the
+    parameter costs some tuning; sending it where it is rejected costs every
+    answer. Given a model nobody has recorded a capability for, the failure that
+    still returns an answer is the better one.
+    """
+    supported = _SUPPORTS_EFFORT.get(model)
+    if supported is None:
+        log.warning(
+            "no effort capability recorded for model %r; sending the request"
+            " without output_config.effort. Add it to _SUPPORTS_EFFORT.",
+            model,
+        )
+        return False
+    return supported
 
 
 def _cost(model: str, input_tokens: int, output_tokens: int) -> float:
@@ -377,12 +406,15 @@ class ClaudeAnswerProvider:
 
     def stream(self, question: str, contexts: list[dict[str, Any]]) -> Iterator[dict[str, Any]]:
         user = _build_user_turn(question, contexts, new_fence_nonce())
+        extra: dict[str, Any] = {}
+        if _supports_effort(self._model):
+            extra["output_config"] = {"effort": "low"}
         with self._client.messages.stream(
             model=self._model,
             max_tokens=settings.answer_max_tokens,
             system=_SYSTEM,
-            output_config={"effort": "low"},
             messages=[{"role": "user", "content": user}],
+            **extra,
         ) as stream:
             for text in stream.text_stream:
                 yield {"type": "token", "text": text}
