@@ -42,7 +42,7 @@ jobs:
       - name: Check the update type
         id: meta
         if: steps.pr.outputs.number != ''
-        uses: dependabot/fetch-metadata@v2
+        uses: dependabot/fetch-metadata@v3
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           # fetch-metadata reads the PR referenced here rather than the event.
