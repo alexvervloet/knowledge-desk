@@ -10,6 +10,7 @@ A provider's `stream(question, contexts)` yields event dicts:
 
 from __future__ import annotations
 
+import logging
 import re
 import secrets
 from collections.abc import Iterator
@@ -18,14 +19,25 @@ from typing import Any
 from knowledge_desk import normalize
 from knowledge_desk.config import settings
 
+log = logging.getLogger(__name__)
+
 MOCK_BANNER = "[MOCK] no answer-model key set; this reply is not model-generated."
 
-# Input/output USD per 1M tokens. Used only for the done-frame estimate.
+# Input/output USD per 1M tokens. Not only the done-frame estimate: these
+# numbers feed `finalize_answer`, which is what the per-org rolling budget and
+# the platform daily cap are summed from. A wrong rate here silently resizes
+# every customer's budget.
 _PRICING = {
     "claude-opus-5": (5.0, 25.0),
     "claude-opus-4-8": (5.0, 25.0),
-    "claude-sonnet-5": (3.0, 15.0),
+    "claude-sonnet-5": (2.0, 10.0),
+    "claude-haiku-4-5": (1.0, 5.0),
 }
+
+# What an unpriced model is charged at. The most expensive rate we know, so an
+# unlisted model over-counts against a budget rather than under-counting: a
+# customer stopped early can ask, while one who overspent has already spent it.
+_UNPRICED = max(_PRICING.values())
 
 _SYSTEM = (
     "You are a knowledge assistant. Answer the question using only the provided"
@@ -162,7 +174,24 @@ def count_defused(contexts: list[dict[str, Any]]) -> int:
 
 
 def _cost(model: str, input_tokens: int, output_tokens: int) -> float:
-    in_rate, out_rate = _PRICING.get(model, _PRICING["claude-opus-5"])
+    """USD for one answer. Bills an unpriced model at the dearest known rate.
+
+    The fallback used to be silent and to name Opus specifically, so setting
+    `answer_model` to anything unlisted produced numbers that looked right and
+    were not, in whichever direction the real price happened to lie. Budgets are
+    summed from these, so the miss compounds per answer rather than showing up
+    once.
+    """
+    rates = _PRICING.get(model)
+    if rates is None:
+        log.warning(
+            "no price for model %r; billing at the dearest known rate %s."
+            " Add it to _PRICING to bill it correctly.",
+            model,
+            _UNPRICED,
+        )
+        rates = _UNPRICED
+    in_rate, out_rate = rates
     return round(input_tokens / 1e6 * in_rate + output_tokens / 1e6 * out_rate, 6)
 
 
