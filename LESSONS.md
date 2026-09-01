@@ -909,3 +909,43 @@ Takeaway: `anchors.py` is downstream of anything that edits Python. Any workflow
 that runs it needs to run it last. The reason CI never caught this ordering is
 that CI only ever sees the settled state, where both checks pass. The trap only
 exists mid-edit, which is where a plan has to encode it.
+
+## 44. A tenant delete that stranded its own owner
+
+**Found by a different repo.** model-swap loads a corpus into a throwaway
+tenant and resets it between runs. The reset deleted the tenant and then failed
+to recreate it with `duplicate key value violates unique constraint
+"users_email_key"`.
+
+**Expected.** `delete_org` cascades everything org-scoped, and the docstring
+listed what goes: memberships, documents, chunks, answers, audit records,
+sessions. Users are deliberately not on that list, because one person can belong
+to several orgs and deleting one org must not delete the person.
+
+**What actually happened.** That reasoning is right for a user in two orgs and
+wrong for a user in one. Deleting the tenant left the owner's `users` row with
+no memberships at all. Login resolves through a membership, so nothing could
+ever log into it, and signup refuses an email that already exists, so the
+address could never be used again. Deleting a tenant permanently burned its
+owner's email.
+
+`TenantScope.remove_member` had the identical defect, which is the part worth
+noticing: the same wrong assumption was written twice, in two modules, months
+apart. An admin who removed a member by mistake could not add them back.
+
+**Why the tests did not catch it.** `test_delete_tenant_is_owner_only_and_cascades`
+asserts the session stops resolving afterwards, which it does. Every test
+checked what the delete removed. None checked what it left, and a leftover is
+invisible to an assertion about absence.
+
+**The general form.** A cascade is a statement about which rows belong to which
+owner, and the interesting cases are the rows that belong to more than one and
+the rows that used to. When a delete deliberately spares a row, the question to
+ask next is what that row is worth on its own, and whether anything can still
+reach it. If nothing can, sparing it is not conservatism, it is a leak of
+whatever the row holds. Here it held an email address and a password hash.
+
+**Also.** The fix shifted line numbers in `tenancy.py`, which stales the
+anchors the education docs point at. Same trap as entry 43, and the same
+one-line repair: run `scripts/anchors.py --fix` after any edit that moves code,
+not only after a reformat.
