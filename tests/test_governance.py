@@ -186,6 +186,65 @@ def test_delete_tenant_is_owner_only_and_cascades():
     assert client.get("/me", headers=auth(owner)).status_code == 401
 
 
+def test_deleting_a_tenant_releases_the_owner_email():
+    """A tenant delete used to leave the owner's user row behind. It had no
+    memberships, so nobody could log into it, and its email was refused for
+    every future signup. The address was burned by deleting the org that owned
+    it."""
+    owner = signup("acme", "o@acme.test")
+    assert client.delete("/org", headers=auth(owner)).status_code == 204
+
+    again = client.post(
+        "/auth/signup",
+        json={"org_slug": "acme2", "org_name": "Acme 2", "email": "o@acme.test", "password": PW},
+    )
+    assert again.status_code == 201, again.text
+
+
+def test_deleting_a_tenant_keeps_a_member_who_belongs_to_another_org():
+    """The reason users are not org-scoped in the first place. Deleting one
+    tenant must not touch an account that is still in use somewhere else."""
+    acme = signup("acme", "o@acme.test")
+    globex = signup("globex", "o@globex.test")
+    add_member(acme, "shared@x.test")
+    # The same person in a second org, which today means a second account.
+    add_member(globex, "shared2@x.test")
+
+    assert client.delete("/org", headers=auth(acme)).status_code == 204
+
+    still_there = login("shared2@x.test", "globex")
+    assert client.get("/me", headers=auth(still_there)).status_code == 200
+
+
+def test_removing_a_member_from_their_only_org_releases_the_email():
+    """The same defect on the other path: remove_member deletes the membership
+    and used to leave the user."""
+    owner = signup("acme", "o@acme.test")
+    user_id = add_member(owner, "dev@acme.test")
+
+    assert client.delete(f"/members/{user_id}", headers=auth(owner)).status_code == 204
+
+    readded = client.post(
+        "/members",
+        headers=auth(owner),
+        json={"email": "dev@acme.test", "password": PW, "role": "member"},
+    )
+    assert readded.status_code == 201, readded.text
+
+
+def test_a_removed_member_cannot_log_in_with_the_old_password():
+    """Deleting the row also invalidates the credential, which is the point of
+    removing someone."""
+    owner = signup("acme", "o@acme.test")
+    user_id = add_member(owner, "dev@acme.test")
+    client.delete(f"/members/{user_id}", headers=auth(owner))
+
+    resp = client.post(
+        "/auth/login", json={"email": "dev@acme.test", "password": PW, "org_slug": "acme"}
+    )
+    assert resp.status_code == 401
+
+
 # --- row-level security ----------------------------------------------------
 
 

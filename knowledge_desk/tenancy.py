@@ -221,6 +221,12 @@ class TenantScope:
                 "delete from memberships where user_id = %s and org_id = %s",
                 (user_id, self.org_id),
             )
+            # Removing someone from their only org strands the user row: no
+            # membership means no way to log in, while the email stays taken
+            # for good. Imported here because accounts imports this module.
+            from knowledge_desk.accounts import purge_stranded_users
+
+            purge_stranded_users(conn, [user_id])
 
     # --- documents --------------------------------------------------------
 

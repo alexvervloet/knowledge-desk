@@ -8,7 +8,9 @@ org-scoped data goes through TenantScope instead.
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from datetime import UTC, datetime, timedelta
+from typing import Any
 
 import psycopg
 
@@ -213,9 +215,55 @@ def purge_expired_sessions() -> int:
     return result.rowcount
 
 
+def purge_stranded_users(conn: psycopg.Connection[Any], user_ids: Sequence[str]) -> int:
+    """Delete any of `user_ids` left with no membership, and return how many.
+
+    A user row is only reachable through a membership. Login takes an org slug,
+    and every read is org-scoped, so a user with no memberships is not an
+    account anybody can use. Its email stays permanently unavailable, because
+    both signup and `add_member` refuse an email that already exists.
+
+    That refusal is right for a live account, for the reason `add_member`
+    documents at length: nothing in an admin's request is evidence the account
+    holder agreed to anything. It is wrong for a row that belongs to nobody,
+    which is what is left behind when a tenant is deleted or a member is removed
+    from their only org. Before this existed, deleting a tenant burned its
+    owner's email address for good.
+
+    Audit history survives. `audit_log.actor_user_id` is `on delete set null`
+    exactly so that a user can be erased without erasing the record of what they
+    did, and any audit rows belonging to the deleted org have already gone with
+    it.
+
+    Scoped to the ids the caller just affected rather than sweeping the table,
+    so a bug elsewhere cannot turn an unrelated account into collateral.
+    """
+    if not user_ids:
+        return 0
+    result = conn.execute(
+        "delete from users where id = any(%s)"
+        " and not exists (select 1 from memberships where user_id = users.id)",
+        (list(user_ids),),
+    )
+    return result.rowcount
+
+
 def delete_org(org_id: str) -> None:
     """Delete an entire tenant. Every org-scoped table references orgs with
     `on delete cascade`, so this removes memberships, documents, chunks, answers,
-    audit records, and sessions in one statement."""
+    audit records, and sessions in one statement.
+
+    Users are not org-scoped, because one person can belong to several orgs, so
+    the cascade leaves them. Anyone whose only membership was this org is then
+    stranded and is deleted too; see `purge_stranded_users`. A member of another
+    org keeps their account and their access to it.
+    """
     with connect() as conn:
+        members = [
+            str(row["user_id"])
+            for row in conn.execute(
+                "select user_id from memberships where org_id = %s", (org_id,)
+            ).fetchall()
+        ]
         conn.execute("delete from orgs where id = %s", (org_id,))
+        purge_stranded_users(conn, members)
