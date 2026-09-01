@@ -12,6 +12,30 @@ do, not merely a change to security-adjacent code.
 The migration files carry phase numbers in their comments as a record of when
 each was written. The sections below name which phases those were.
 
+## 2026-09-01 — Model pricing was wrong, and wrong silently
+
+Found while building model-swap, which compares what the same workload costs on
+different models and needs these numbers to be right.
+
+### Fixed
+
+- Claude Sonnet 5 was priced at $3.00/$15.00 per million tokens. It is
+  $2.00/$10.00. Every Sonnet answer was billed 50% high, and because
+  `finalize_answer` writes this figure to the column the per-org rolling budget
+  and the platform daily cap are summed from, a Sonnet org's effective budget
+  was a third smaller than the number in its settings.
+- Claude Haiku 4.5 had no entry at all.
+- `_cost` fell back to Opus rates for any model not in the table, silently. An
+  operator setting `answer_model` to anything unlisted got numbers that looked
+  right and were not, in whichever direction the real price happened to lie.
+  The fallback now bills at the dearest known rate and logs a warning naming the
+  model. Dearest rather than cheapest on purpose: over-counting stops a customer
+  early, which they can ask about, while under-counting spends money they never
+  agreed to.
+
+The rates came from the current Anthropic pricing table rather than from
+memory, which is how the Sonnet error was visible at all.
+
 ## 2026-09-01 — A deleted tenant no longer burns its owner's email
 
 Found while building [model-swap](https://github.com/alexvervloet/model-swap),
