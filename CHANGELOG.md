@@ -12,6 +12,40 @@ do, not merely a change to security-adjacent code.
 The migration files carry phase numbers in their comments as a record of when
 each was written. The sections below name which phases those were.
 
+## 2026-09-01 — A deleted tenant no longer burns its owner's email
+
+Found while building [model-swap](https://github.com/alexvervloet/model-swap),
+which loads a corpus into a throwaway tenant and resets it between runs. The
+reset deleted the tenant and then could not recreate it.
+
+### Fixed
+
+- `delete_org` cascades every org-scoped table but left the `users` rows
+  behind, because users are deliberately not org-scoped: one person can belong
+  to several orgs. For anyone whose only membership was that org, what survived
+  was an account with no memberships. Nothing could log into it, since login
+  resolves through a membership, and its email was refused for every future
+  signup. Deleting a tenant permanently burned its owner's email address.
+- `TenantScope.remove_member` had the same defect. Removing someone from their
+  only org stranded the same row, so an admin who removed a member by mistake
+  could not add them back.
+
+Both now call `accounts.purge_stranded_users`, which deletes only the users the
+caller just affected and only when no membership remains. A member of another
+org keeps their account, which is the reason users are global in the first
+place. Audit history survives either way: `audit_log.actor_user_id` is
+`on delete set null` precisely so a user can be erased without erasing the
+record of what they did.
+
+This does not weaken the refusal `add_member` documents. Refusing an email that
+belongs to a live account is right, because nothing in an admin's request is
+evidence the account holder agreed to anything. A row with no memberships is not
+an account, and nobody is protected by keeping it.
+
+Four tests. Two fail without the fix; the other two are guards against it going
+too far, checking that a member of a second org survives a tenant delete and
+that a removed member cannot log in with their old password.
+
 ## 2026-08-30 — Six gaps in the static analysis, closed
 
 An audit of what CI actually enforced. Ruff and mypy were doing real work; the
