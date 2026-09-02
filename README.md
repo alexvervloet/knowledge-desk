@@ -30,6 +30,24 @@ nothing it is allowed to cite. That refusal is the whole point of the project.
 Running with real Claude answers and Voyage embeddings. The machine sleeps when
 idle, so the first request after a quiet period pays a cold start.
 
+## What its own evals do not check
+
+Six evals gate every merge here, and each asserts a system property that holds
+whatever the model says: a permission boundary held, a citation resolves, an
+injected instruction was quoted rather than obeyed. They pass identically on any
+model you point them at, which is what makes them trustworthy and also what they
+cannot tell you. Nothing in this repository measures whether the answers are any
+good.
+
+[model-swap](https://github.com/alexvervloet/model-swap) is the project that
+does, with this app as its system under test. It drives the assistant in-process
+against its own corpus, grades the answers with a judge calibrated against human
+labels, and reads the result against a margin declared before the comparison ran.
+Three defects in this repository were found by it and fixed here: a tenant delete
+that stranded its owner's account, a pricing table the budget cap is summed from
+that was wrong for Sonnet, and a request parameter that made `answer_model`
+configurable in name only.
+
 ## Status
 
 Feature complete and deployed. See [WALKTHROUGH.md](docs/WALKTHROUGH.md) for a
