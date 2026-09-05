@@ -983,3 +983,70 @@ which is the only reason the next model added will not repeat this.
 project's Postgres. Running this repo's test suite truncates that database, so
 the other project's corpus vanishes mid-session. Nothing is wrong with either
 repo; two things share one database and only one of them knows it.
+
+## 46. The auto-merge workflow has never merged anything
+
+**Found by a different repo.** policy-asof copied this workflow on its first day,
+Dependabot filed three pull requests within seconds of the repo existing, and all
+three auto-merge runs failed where here they had simply never been looked at.
+
+**Expected.** Patch and minor updates merge once CI is green, majors are left for
+review. Written in entry 21 as the counterpart to a bot that generates work
+indefinitely, reviewed, and in place since.
+
+**What happened.**
+
+```
+##[warning]Unexpected input(s) 'pr-number', valid inputs are
+  ['alert-lookup', 'compat-lookup', 'github-token',
+   'skip-commit-verification', 'skip-verification']
+##[warning]Event payload missing `pull_request` key.
+##[error]PR is not from Dependabot, nothing to do.
+```
+
+`dependabot/fetch-metadata` has no `pr-number` input. Not in v2, and not on main.
+It reads the `pull_request` key out of the event payload, so it works under
+`pull_request` and `pull_request_target` and nowhere else. This workflow triggers
+on `workflow_run`, deliberately, because that is how you wait for CI without
+adopting branch protection. Those two decisions are incompatible and always were.
+
+The line above the call said:
+
+```yaml
+# fetch-metadata reads the PR referenced here rather than the event.
+```
+
+That comment is false. It was written to explain a parameter the action does not
+accept, and it is the reason nobody looked again. Same shape as the migration
+comment in entry 42's family: a sentence asserting a property is not a test of
+it, and writing it down makes the property *less* likely to be checked.
+
+**Why it survived here.** The failing job only runs when Dependabot opens a pull
+request, and only after CI passes on it, so a red run sits two hops from anything
+anyone reads. Entry 18 is the giveaway in hindsight: thirteen open pull requests,
+seven of them merged by hand during the same phase this workflow was written.
+The merges happened. Nothing distinguished "the workflow merged them" from "I
+merged them and the workflow failed quietly afterwards."
+
+**Fix.** Drop the action. Dependabot writes the same metadata into the commit
+message as a trailer, so `scripts/dependabot_update_type.py` reads it from there
+and needs no event payload. Three verdicts rather than two: `major`,
+`minor-or-patch`, and `unknown`, and only `minor-or-patch` merges. `unknown` is a
+real outcome rather than a fallback, because Dependabot has shipped versions that
+leave `update-type` off pip updates entirely, and entry 37's distinction applies
+exactly here: "I could not tell" and "it is safe" are different answers.
+
+The replacement is not theoretical. In policy-asof it merged a minor-and-patch
+group on its own, with `mergedBy: app/github-actions` one second after the run
+succeeded, and left a pytest major and a mypy major open with a comment. That
+also exposed a smaller bug on the spot: Dependabot rebases an open pull request
+whenever main moves, each rebase re-runs ci, and the review note was posted twice
+on the same pull request. The step now checks for its own comment first.
+
+**Takeaway:** a workflow whose failure is invisible from the happy path has to be
+watched failing at least once, on purpose, before it is trusted. The cheapest
+moment is the first hour of a repository, while the bot is already filing pull
+requests. And porting a mechanism carries its comments with it, including the
+one explaining why an argument is passed, which is the least likely line in the
+file to be checked because it reads as the answer to the question you were about
+to ask.
