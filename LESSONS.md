@@ -1050,3 +1050,21 @@ requests. And porting a mechanism carries its comments with it, including the
 one explaining why an argument is passed, which is the least likely line in the
 file to be checked because it reads as the answer to the question you were about
 to ask.
+
+## Creating a group does not join it
+
+Writing the demo seed, the owner created a group, restricted a document to it,
+and then could not read the document. `principals()` returns `public-to-org`,
+`user:<id>`, and a `group:<id>` for each group the caller is a *member* of.
+Creating a group is an admin action and does not add the creator to it.
+
+This is correct: an owner outside a group is as excluded as anyone else, which
+is what makes group membership mean something rather than being advisory for
+anyone senior enough. It is also easy to assume the other way, and the failure
+is silent. Nothing errors, the document is simply invisible to the person who
+just restricted it, which reads as a bug in retrieval rather than a missing
+membership row.
+
+The seed now adds the owner to the group explicitly, and the test for the new
+`GET /documents/{id}` route says so in its docstring rather than leaving the
+next reader to rediscover it.
