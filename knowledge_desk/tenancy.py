@@ -297,6 +297,36 @@ class TenantScope:
                 (self.org_id, limit, offset),
             ).fetchall()
 
+    def get_document(self, document_id: str) -> dict[str, Any]:
+        """One document with its text, but only if this caller may read it.
+
+        Unlike `list_documents`, which is open to every member because knowing a
+        document exists is not reading it, this returns content and so is gated
+        by the same ACL predicate retrieval uses. The check is part of the query
+        rather than a test on the fetched row: a post-filter is one forgotten
+        `if` away from returning the content it was meant to withhold.
+
+        A document that is out of scope raises NotFound, not Forbidden. That is
+        deliberate and matches the rest of this class: distinguishing the two
+        answers "does not exist" from "exists, not yours" would let anyone with
+        an id test whether a document exists.
+        """
+        principals = self.principals()
+        with connect(self.org_id) as conn:
+            row = conn.execute(
+                "select d.id, d.path, d.status, d.updated_at,"
+                " string_agg(c.text, %s order by c.ordinal) as content,"
+                " count(c.id) as chunk_count"
+                " from documents d join chunks c on c.document_id = d.id"
+                " where d.id = %s and d.org_id = %s and d.status = 'ingested'"
+                " and c.acl ?| %s"
+                " group by d.id, d.path, d.status, d.updated_at",
+                ("\n", document_id, self.org_id, principals),
+            ).fetchone()
+        if row is None:
+            raise NotFound(f"document not found: {document_id}")
+        return row
+
     def delete_document(self, document_id: str) -> None:
         """Delete a document and everything derived from it. Admin only. Chunks
         cascade via the foreign key; the ACL lives on the document row, so it

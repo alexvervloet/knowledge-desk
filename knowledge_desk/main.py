@@ -272,6 +272,19 @@ def list_documents(
     return scope.list_documents(limit, offset)
 
 
+@app.get("/documents/{document_id}")
+def get_document(
+    document_id: str, scope: Annotated[TenantScope, Depends(current_scope)]
+) -> dict[str, Any]:
+    """One document's text, if the caller is permitted to read it.
+
+    The ACL filter is part of the fetch, so this cannot return content the caller
+    may not see. A document that exists but is out of scope is a 404, the same as
+    one that does not exist, so an id cannot be used to test for existence.
+    """
+    return scope.get_document(document_id)
+
+
 @app.delete("/documents/{document_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_document(
     document_id: str, scope: Annotated[TenantScope, Depends(current_scope)]
