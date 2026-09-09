@@ -186,3 +186,67 @@ def test_an_absent_acl_still_takes_the_org_wide_default():
     owner = signup("acme", "owner@acme.test")
     upload(owner, [{"path": "open.txt", "content": SECRET}])
     assert "open.txt" in found(owner, SECRET)
+
+
+# --- GET /documents/{id} ---------------------------------------------------
+# This route returns content, unlike GET /documents which returns metadata and is
+# open to every member. So it carries the ACL predicate in its fetch, and these
+# tests are the ones that keep that true.
+
+
+def test_get_document_returns_content_to_a_permitted_reader():
+    owner = signup("acme", "owner@acme.test")
+    upload(owner, [{"path": "runbook.txt", "content": SECRET, "acl": ["public-to-org"]}])
+
+    doc_id = client.get("/documents", headers=auth(owner)).json()[0]["id"]
+    resp = client.get(f"/documents/{doc_id}", headers=auth(owner))
+
+    assert resp.status_code == 200
+    assert SECRET in resp.json()["content"]
+
+
+def test_get_document_hides_a_document_outside_the_callers_groups():
+    """A member who is not in the group cannot read the document, even holding
+    its id. The id is not a capability.
+
+    Note the owner is added to the group explicitly: creating a group does not
+    join it, and an owner outside the group is as excluded as anyone else. That
+    is the right behaviour and it is easy to assume otherwise."""
+    owner = signup("acme", "owner@acme.test")
+    add_member(owner, "dev@acme.test")
+    dev = login("dev@acme.test", "acme")
+    gid = client.post("/groups", headers=auth(owner), json={"name": "eng"}).json()["id"]
+    client.post(f"/groups/{gid}/members", headers=auth(owner), json={"email": "owner@acme.test"})
+    upload(owner, [{"path": "eng.txt", "content": SECRET, "acl": [f"group:{gid}"]}])
+
+    doc_id = client.get("/documents", headers=auth(owner)).json()[0]["id"]
+
+    assert client.get(f"/documents/{doc_id}", headers=auth(owner)).status_code == 200
+    assert client.get(f"/documents/{doc_id}", headers=auth(dev)).status_code == 404
+
+
+def test_get_document_across_orgs_is_a_404_not_a_403():
+    """The tenant boundary and the "does it exist" boundary are the same answer.
+    A 403 here would confirm the document exists to someone in another org."""
+    a = signup("acme", "owner@acme.test")
+    b = signup("globex", "owner@globex.test")
+    upload(a, [{"path": "secret.txt", "content": SECRET, "acl": ["public-to-org"]}])
+
+    doc_id = client.get("/documents", headers=auth(a)).json()[0]["id"]
+    resp = client.get(f"/documents/{doc_id}", headers=auth(b))
+
+    assert resp.status_code == 404
+    assert SECRET not in resp.text
+
+
+def test_get_document_reassembles_chunks_in_order():
+    """Content is stitched from chunks by ordinal. Out of order it would still
+    look like a document and read as nonsense."""
+    owner = signup("acme", "owner@acme.test")
+    long_doc = "\n\n".join(f"Section {i} covers topic number {i}." * 12 for i in range(1, 5))
+    upload(owner, [{"path": "long.txt", "content": long_doc, "acl": ["public-to-org"]}])
+
+    doc_id = client.get("/documents", headers=auth(owner)).json()[0]["id"]
+    content = client.get(f"/documents/{doc_id}", headers=auth(owner)).json()["content"]
+
+    assert content.index("Section 1") < content.index("Section 4")
