@@ -1068,3 +1068,77 @@ membership row.
 The seed now adds the owner to the group explicitly, and the test for the new
 `GET /documents/{id}` route says so in its docstring rather than leaving the
 next reader to rediscover it.
+
+## claude-opus-5 refuses this app's system prompt, and nothing here could see it
+
+Every real answer came back empty. `/ask` streamed no token frames and a `done`
+frame with `output_tokens: 0`, so the caller saw an assistant with nothing to
+say. The whole suite was green, and production was fine, so nothing pointed at it.
+
+The API was declining the request outright: `stop_reason: refusal`,
+`stop_details.category: reasoning_extraction`, HTTP 200 with empty content.
+
+### What the bisect found, and what it did not
+
+The obvious suspect was the fence paragraph, the one explaining that passage
+delimiters carry per-request digits. Testing each paragraph of `_SYSTEM` alone:
+
+    paragraph 1 (answer + cite)     answers
+    paragraph 2 (untrusted data)    answers
+    paragraph 3 (fence markers)     REFUSED
+
+That looked conclusive and was not. Removing paragraph 3 entirely still refused,
+and so did paragraphs 1 and 2 together with no fence language at all. Five
+rewordings of paragraph 3 all refused. The trigger is the accumulation of
+instruction-hardening language, not any one sentence, so there was no wording fix
+that kept the defence.
+
+Then the same unchanged prompt across models:
+
+    claude-opus-5     REFUSED   reasoning_extraction
+    claude-sonnet-5   answers   [1] "Acme refunds are processed within five..."
+    claude-haiku-4-5  answers
+    claude-opus-4-8   answers
+
+The prompt was never the problem. `answer_model` is now `claude-sonnet-5`, the
+security wording is untouched, and all six evals pass against the real provider
+including the three injection defences and fence integrity.
+
+### Why the eval gate could not catch it
+
+The README says the six evals "pass identically on any model you point them at,
+which is what makes them trustworthy and also what they cannot tell you". That is
+exactly right and this is its shape: they run the mock provider, so
+`grounded-answer  cited_policy_doc=True` was green while no real answer could be
+produced at all. A property that holds for every model also holds when no model
+answered.
+
+Worse, the suite cannot be run against a real one. Five tests assert
+mock-provider behaviour and fail when a key is present, `test_healthz_reports_mock_provider`
+by name. So "run the tests with a key" was not an available move.
+
+`tests/test_real_provider.py` closes that: one call, skipped without a key, run
+on its own. It fails on `claude-opus-5` with the category in the message. A
+deliberately model-independent suite needs one companion check that is not.
+
+### Two things changed beyond the model
+
+A refusal now raises `AnswerRefused` instead of streaming nothing. That defect
+outlives this model choice: any future refusal would otherwise present as an
+assistant with nothing to say, which is indistinguishable from an honest "I have
+nothing I can cite" and invisible to every test that does not call a model.
+
+`fallbacks` was considered and not added. It is Anthropic's remedy for a refusal
+category and it would have kept answers flowing. It also means answers silently
+come from a different model, which is the one thing this project cannot afford:
+model-swap exists to measure answer quality per model against this app, and a
+silent substitution makes those numbers describe a model that was not asked for.
+A loud failure and a test that catches it beat a quiet rescue here. Worth
+revisiting if refusals ever become routine.
+
+### What to do differently
+
+Production was unaffected only because fly.io was running an older build. The
+next deploy would have shipped it. When a bug is invisible to the test suite and
+invisible in production, check whether production is simply running different
+code before concluding the bug is new.
