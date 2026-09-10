@@ -48,7 +48,17 @@ class Settings(BaseSettings):
     job_max_attempts: int = 3
 
     # Assistant.
-    answer_model: str = "claude-opus-5"
+    #
+    # Sonnet rather than Opus 5, and not for cost. `claude-opus-5` returns
+    # `stop_reason: refusal` with category `reasoning_extraction` on this app's
+    # system prompt, so every answer comes back empty. The prompt is not the
+    # problem: Sonnet 5, Haiku 4.5 and Opus 4.8 all answer the identical prompt
+    # and cite correctly. Bisecting it showed the refusal is cumulative rather
+    # than one sentence, and holds with the fence paragraph removed entirely,
+    # so there is no wording fix that keeps the defence intact.
+    #
+    # Sonnet also costs $2/$10 per MTok against $5/$25. See LESSONS.md.
+    answer_model: str = "claude-sonnet-5"
     answer_max_tokens: int = 2048
     retrieval_k: int = 6
 
