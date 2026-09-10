@@ -65,3 +65,62 @@ def test_every_priced_model_has_an_effort_capability():
     """The two tables are edited together or they drift, and the drift is only
     visible when somebody switches models."""
     assert set(_PRICING) == set(_SUPPORTS_EFFORT)
+
+
+# --- refusals --------------------------------------------------------------
+
+
+def test_the_default_answer_model_is_one_that_does_not_refuse_this_prompt():
+    """`claude-opus-5` returns stop_reason "refusal" with category
+    "reasoning_extraction" on this app's system prompt, so every answer comes
+    back empty. Sonnet 5, Haiku 4.5 and Opus 4.8 answer the identical prompt.
+
+    This is a reminder rather than a proof: it cannot detect the day another
+    model starts refusing. `tests/test_real_provider.py` is the one that can, and
+    it only runs when a key is present.
+    """
+    from knowledge_desk.config import settings
+
+    assert settings.answer_model != "claude-opus-5", (
+        "claude-opus-5 refuses this system prompt outright; see LESSONS.md"
+    )
+
+
+def test_a_refusal_raises_instead_of_streaming_nothing(monkeypatch):
+    """A declined request is HTTP 200 with no content. Left alone it reaches the
+    caller as an assistant with nothing to say, which is indistinguishable from
+    an honest refusal to cite and invisible to every mock-provider test."""
+    import pytest
+
+    from knowledge_desk.providers import AnswerRefused, ClaudeAnswerProvider
+
+    class _Refused:
+        stop_reason = "refusal"
+        stop_details = type("D", (), {"category": "reasoning_extraction"})()
+        usage = type("U", (), {"input_tokens": 1905, "output_tokens": 0})()
+
+    class _Stream:
+        text_stream: list[str] = []
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *exc):
+            return False
+
+        def get_final_message(self):
+            return _Refused()
+
+    class _Messages:
+        def stream(self, **kwargs):
+            return _Stream()
+
+    class _Client:
+        messages = _Messages()
+
+    provider = ClaudeAnswerProvider.__new__(ClaudeAnswerProvider)
+    provider._model = "claude-sonnet-5"
+    provider._client = _Client()
+
+    with pytest.raises(AnswerRefused, match="reasoning_extraction"):
+        list(provider.stream("anything", []))
