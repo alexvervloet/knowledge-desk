@@ -20,6 +20,7 @@ dependencies = { file = ["requirements.txt"] }
 testpaths = ["tests"]
 markers = [
     "eval: merge-gating evals (permission leak, grounded answer)",
+    "real_provider: makes one real API call; skipped without a key",
 ]
 
 [tool.coverage.run]
