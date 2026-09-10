@@ -39,6 +39,14 @@ model you point them at, which is what makes them trustworthy and also what they
 cannot tell you. Nothing in this repository measures whether the answers are any
 good.
 
+They also cannot tell you whether a model answered at all. `claude-opus-5`
+declines this system prompt outright, with `stop_reason: refusal` and category
+`reasoning_extraction`, so every answer came back empty while all six evals
+stayed green. A property that holds for any model also holds when no model
+answered. `tests/test_real_provider.py` is the one check that calls a real model
+and asserts it was not refused; it runs on its own, with a key, and the story is
+in LESSONS.md.
+
 [model-swap](https://github.com/alexvervloet/model-swap) is the project that
 does, with this app as its system under test. It drives the assistant in-process
 against its own corpus, grades the answers with a judge calibrated against human
