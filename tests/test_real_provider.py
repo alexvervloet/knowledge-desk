@@ -9,10 +9,16 @@ That happened. `claude-opus-5` returned `stop_reason: refusal` with category
 `reasoning_extraction` on this app's system prompt, every answer came back
 empty, and the whole suite stayed green. See LESSONS.md.
 
-Skipped without a key, so the default suite is unchanged. Run it before changing
-the system prompt or the answer model, and in any CI job that has a key:
+Skipped without a key, so the default suite is unchanged. Run it on its own,
+before changing the system prompt or the answer model:
 
-    pytest tests/test_real_provider.py
+    ANTHROPIC_API_KEY=... pytest tests/test_real_provider.py
+
+On its own deliberately. Five tests elsewhere assert mock-provider behaviour and
+fail when a key is present (`test_healthz_reports_mock_provider` by name), so
+`pytest` with a key in the environment is not a thing this suite supports. That
+is also part of why a refusing model went unnoticed: there was no way to run the
+suite against a real one.
 
 One call, a few hundred tokens, well under a cent.
 """

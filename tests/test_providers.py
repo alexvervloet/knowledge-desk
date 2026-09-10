@@ -81,9 +81,9 @@ def test_the_default_answer_model_is_one_that_does_not_refuse_this_prompt():
     """
     from knowledge_desk.config import settings
 
-    assert settings.answer_model != "claude-opus-5", (
-        "claude-opus-5 refuses this system prompt outright; see LESSONS.md"
-    )
+    assert (
+        settings.answer_model != "claude-opus-5"
+    ), "claude-opus-5 refuses this system prompt outright; see LESSONS.md"
 
 
 def test_a_refusal_raises_instead_of_streaming_nothing(monkeypatch):
