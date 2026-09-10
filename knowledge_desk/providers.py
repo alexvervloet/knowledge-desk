@@ -382,6 +382,15 @@ class MockAnswerProvider:
         }
 
 
+class AnswerRefused(Exception):
+    """The API declined the request.
+
+    Distinct from a network or quota failure: retrying the same prompt on the
+    same model gets the same answer, so the caller should surface it rather than
+    back off and try again.
+    """
+
+
 class ClaudeAnswerProvider:
     name = "claude"
 
@@ -419,6 +428,7 @@ class ClaudeAnswerProvider:
             for text in stream.text_stream:
                 yield {"type": "token", "text": text}
             final = stream.get_final_message()
+
         usage = final.usage
         yield {
             "type": "usage",
@@ -426,6 +436,21 @@ class ClaudeAnswerProvider:
             "output_tokens": usage.output_tokens,
             "cost_usd": _cost(self._model, usage.input_tokens, usage.output_tokens),
         }
+
+        # A declined request returns HTTP 200 with no content, so without this it
+        # reaches the caller as an assistant that had nothing to say. That is the
+        # worst possible presentation: indistinguishable from an honest "I cannot
+        # cite anything for that", and it stays green in every test that does not
+        # call a real model. `claude-opus-5` declines this app's system prompt
+        # outright (see LESSONS.md), which is how the silence was found at all.
+        if final.stop_reason == "refusal":
+            details = final.stop_details
+            category = getattr(details, "category", None) or "unspecified"
+            log.error("answer refused by the API: model=%s category=%s", self._model, category)
+            raise AnswerRefused(
+                f"The model declined this request (category: {category}). "
+                "This is a provider policy decision, not a retrieval failure."
+            )
 
 
 def get_answer_provider() -> ClaudeAnswerProvider | MockAnswerProvider:
