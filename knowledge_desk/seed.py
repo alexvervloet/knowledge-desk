@@ -9,12 +9,21 @@ returns different answers. Tenant isolation alone cannot show that, and it is th
 harder half of the boundary to get right.
 
     python -m knowledge_desk.seed
+    python -m knowledge_desk.seed --reset    # rebuild the demo data first
 
 Idempotent: an org that already exists is left alone. Prints the demo logins.
+
+`--reset` exists because running the test suite destroys this data. `clean_db`
+truncates every domain table, and whichever test ran last leaves its own org and
+users behind, so a plain re-seed then skips on the slug and the demo logins stay
+broken. It removes only the two demo slugs and the accounts under the two demo
+email domains, so it is safe to run against a development database and pointless
+against any other.
 """
 
 from __future__ import annotations
 
+import argparse
 import sys
 from typing import Any
 
@@ -239,6 +248,24 @@ _ORGS: list[dict[str, Any]] = [
 ]
 
 
+def reset() -> None:
+    """Remove the demo orgs and any account in the demo email domains."""
+    with connect() as conn:
+        for spec in _ORGS:
+            row = conn.execute("select id from orgs where slug = %s", (spec["slug"],)).fetchone()
+            if row:
+                # Deleting the org cascades to its documents, chunks and
+                # memberships. Users are not org-scoped, so they outlive it and
+                # have to go separately or the next signup collides on the email.
+                conn.execute("delete from orgs where id = %s", (row["id"],))
+                print(f"  removed org {spec['slug']}")
+        domains = tuple(f"%@{spec['slug']}.test" for spec in _ORGS)
+        removed = 0
+        for pattern in domains:
+            removed += conn.execute("delete from users where email like %s", (pattern,)).rowcount
+        print(f"  removed {removed} demo accounts")
+
+
 def _org_exists(slug: str) -> bool:
     with connect() as conn:
         return conn.execute("select 1 from orgs where slug = %s", (slug,)).fetchone() is not None
@@ -287,7 +314,16 @@ def seed() -> None:
 
 
 if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="Seed the two demo tenants.")
+    parser.add_argument(
+        "--reset",
+        action="store_true",
+        help="remove the demo orgs and accounts first, then seed from scratch",
+    )
+    args = parser.parse_args()
     try:
+        if args.reset:
+            reset()
         seed()
     finally:
         # The pool's finalizer tries to join its worker threads, which Python
