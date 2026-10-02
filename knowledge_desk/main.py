@@ -20,14 +20,15 @@ to do.
 from __future__ import annotations
 
 import json
-from collections.abc import Iterator
+from collections.abc import AsyncIterator, Iterator
+from contextlib import asynccontextmanager
 from typing import Annotated, Any
 
 from fastapi import Depends, FastAPI, HTTPException, Query, Response, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 
-from knowledge_desk import __version__, accounts, assistant, audit, retrieval, tracing
+from knowledge_desk import __version__, accounts, assistant, audit, retrieval, tracing, worker
 from knowledge_desk.auth import hash_token
 from knowledge_desk.bodylimit import BodySizeLimitMiddleware
 from knowledge_desk.config import settings
@@ -57,7 +58,16 @@ from knowledge_desk.schemas import (
 from knowledge_desk.securityheaders import SecurityHeadersMiddleware
 from knowledge_desk.tenancy import AuthContext, TenantScope
 
-app = FastAPI(title="Knowledge Desk", version=__version__)
+
+@asynccontextmanager
+async def lifespan(_: FastAPI) -> AsyncIterator[None]:
+    # Pick up whatever the last process left: jobs queued when the machine
+    # stopped, or one it died in the middle of. There is no worker that would.
+    worker.kick()
+    yield
+
+
+app = FastAPI(title="Knowledge Desk", version=__version__, lifespan=lifespan)
 register_error_handlers(app)
 tracing.init()  # enables Langfuse only if LANGFUSE_* keys are set; no-op otherwise
 # Outermost, so an oversized upload is refused before anything reads it. The
@@ -253,11 +263,14 @@ def upload_folder(
     req: FolderUploadRequest, scope: Annotated[TenantScope, Depends(current_scope)]
 ) -> dict[str, Any]:
     """Reconcile an org's local-folder documents and enqueue ingest jobs for the
-    ones that changed. Returns immediately (202); the worker does the embedding.
+    ones that changed. Returns immediately (202); a background drain in this
+    process does the embedding.
     """
     items = [d.model_dump() for d in req.documents]
     result = scope.sync_source(LOCAL_FOLDER_SOURCE, items)
     audit.log(scope.org_id, scope.ctx.user_id, "source.synced", result)
+    if result["enqueued"]:
+        worker.kick()
     return result
 
 
