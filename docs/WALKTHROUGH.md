@@ -17,7 +17,7 @@ and Step 5 from a terminal.
 
 ## The one-paragraph version
 
-An organization signs up, uploads documents, and a background worker turns them
+An organization signs up, uploads documents, and a background drain turns them
 into embedded chunks. Members ask questions in natural language. Retrieval finds
 the nearest chunks **that the asking user is allowed to see**, and the model
 answers using only those passages, with citations. Every question is metered
@@ -76,23 +76,32 @@ for the first ingest, because the hash check skips chunking and embedding
 entirely. With a real embedding provider the gap is far larger, since what is
 skipped is network calls.
 
-The request returns `202 Accepted` immediately. Embedding happens in the worker.
+The request returns `202 Accepted` immediately. Embedding happens afterwards, in
+a background thread of the same API process.
 
-**Gotcha: nothing is searchable until the worker runs.** In development that
-means a second shell running `python -m knowledge_desk.worker`. If documents sit
-at status `pending` forever, the worker is not running. In the container the
-worker is its own service and this is handled for you.
+**Gotcha: there is no worker process, on purpose.** The upload calls
+`worker.kick()`, which starts a drain or wakes the one already running. The drain
+runs every due job, sleeps through retry backoff, and exits once nothing is
+waiting. An always-on worker used to poll every two seconds, and that poll kept
+the managed database from ever scaling to zero (LESSONS.md, "A two-second poll
+was the whole database bill"). If documents sit at `pending`, look at the API's
+log, because that's where the drain prints. `python -m knowledge_desk.worker`
+still exists for draining by hand. It drains and exits.
 
 **Branch point: caps are checked before the queue.** Per-org document and storage
 caps are enforced at upload, returning `413` before any embedding work is
 enqueued. The check is deliberately conservative: an update counts toward the
 incoming total, so it can refuse slightly early, never slightly late.
 
-## Step 3: the worker embeds, and failures are contained
+## Step 3: the drain embeds, and failures are contained
 
-The worker claims jobs with `SELECT ... FOR UPDATE SKIP LOCKED`, so you can run
-several workers safely. Each job chunks the document (1000 characters, 150
-overlap), embeds the chunks, and replaces that document's chunk set.
+The drain claims jobs with `SELECT ... FOR UPDATE SKIP LOCKED`, so several
+machines can drain at once safely. A job still `running` ten minutes after its
+claim lost its process, usually because Fly stopped the machine mid-job, and the
+next drain picks it up again. Every API start kicks a drain for that reason.
+
+Each job chunks the document (1000 characters, 150 overlap), embeds the chunks,
+and replaces that document's chunk set.
 
 Failure handling is per document, not per batch. A document the embedding
 provider rejects fails its own job, retries with exponential backoff, and after
@@ -364,7 +373,7 @@ is a security incident.
   arriving through another door. The real gap is that there is no "forgot
   password" flow, so a member who cannot log in has no route back in and the
   blunt instrument is still removing and re-adding the membership. Sessions last
-  30 days, and expired rows are purged by the worker.
+  30 days, and each drain purges the expired rows.
 - **On abuse, beyond the controls that are there.** An audit pass in August 2026
   found the operational limits thorough on the authenticated path and thin around
   it, and the gaps it found are fixed: login and signup are throttled and no
