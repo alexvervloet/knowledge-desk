@@ -23,6 +23,11 @@ from knowledge_desk.config import settings
 from knowledge_desk.main import app
 from knowledge_desk.ratelimit import auth_limiter
 
+# Every eval drains the queue itself with run_pending. A background drain kicked
+# by an upload would race it for the same jobs, the same reason the tests turn
+# it off.
+settings.drain_in_process = False
+
 client = TestClient(app)
 
 _ALL_TABLES = (
