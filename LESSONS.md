@@ -1178,6 +1178,12 @@ The sibling `deskhand` already ran its worker inline on one auto-stopping
 machine, and never had this bill. `knowledge-desk-ts` copied the always-on worker
 and would have had it the day it was deployed.
 
+The evals had the same race the tests did. They upload through the app and then
+drain with `run_pending`, and each upload now kicked a background drain too. They
+passed anyway, and the process exited, only because Python's daemon thread
+doesn't block exit. The TypeScript port hung for ten minutes on the same race,
+which is how it was found. The evals now turn the drain off.
+
 ### What to do differently
 
 Treat "what queries does this send when nobody is using it?" as a deploy
