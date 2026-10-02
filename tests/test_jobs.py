@@ -5,6 +5,7 @@ retry-then-dead-letter path that makes at-least-once delivery safe.
 import pytest
 
 from knowledge_desk import accounts, jobs
+from knowledge_desk.config import settings
 from knowledge_desk.db import connect, require_row
 
 pytestmark = pytest.mark.usefixtures("clean_db")
@@ -67,3 +68,56 @@ def test_backoff_delays_reclaim():
     # A real (non-zero) backoff pushes run_after into the future.
     jobs.mark_failed(_claim()["id"], "boom")
     assert jobs.claim_one() is None
+
+
+def _age_claim(seconds: int) -> None:
+    """Pretend every running job was claimed `seconds` ago."""
+    with connect() as conn:
+        conn.execute(
+            "update jobs set updated_at = now() - make_interval(secs => %s)"
+            " where status = 'running'",
+            (seconds,),
+        )
+
+
+def test_stale_running_job_is_reclaimed():
+    # The claiming process died before marking it: the machine stopped mid-job.
+    org = _org()
+    jobs.enqueue(org, "noop", {}, "k")
+    _claim()
+    _age_claim(settings.job_stale_after_seconds + 1)
+    again = _claim()
+    assert again["attempts"] == 2  # the lost run still counts
+
+
+def test_running_job_is_not_reclaimed_before_stale():
+    org = _org()
+    jobs.enqueue(org, "noop", {}, "k")
+    _claim()
+    _age_claim(settings.job_stale_after_seconds - 60)
+    assert jobs.claim_one() is None
+
+
+def test_seconds_until_due():
+    assert jobs.seconds_until_due() is None  # empty queue: nothing will ever be due
+
+    org = _org()
+    jobs.enqueue(org, "noop", {}, "k")
+    assert jobs.seconds_until_due() == 0  # due now
+
+    jobs.mark_failed(_claim()["id"], "boom", backoff_seconds=30)
+    wait = jobs.seconds_until_due()
+    assert wait is not None and 25 < wait <= 30  # waiting on the retry
+
+    with connect() as conn:
+        conn.execute("update jobs set status = 'succeeded'")
+    assert jobs.seconds_until_due() is None  # finished work is never due
+
+
+def test_seconds_until_due_counts_a_running_job_going_stale():
+    org = _org()
+    jobs.enqueue(org, "noop", {}, "k")
+    _claim()
+    wait = jobs.seconds_until_due()
+    stale = settings.job_stale_after_seconds
+    assert wait is not None and stale - 5 < wait <= stale

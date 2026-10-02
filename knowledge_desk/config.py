@@ -46,6 +46,10 @@ class Settings(BaseSettings):
     chunk_size: int = 1000
     chunk_overlap: int = 150
     job_max_attempts: int = 3
+    # A job still `running` this long after its claim lost its process (the
+    # machine stopped mid-embed) and is handed out again. One document embeds
+    # in seconds, so ten minutes cannot catch a job that is merely slow.
+    job_stale_after_seconds: int = 600
 
     # Assistant.
     #
