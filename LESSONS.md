@@ -1142,3 +1142,46 @@ Production was unaffected only because fly.io was running an older build. The
 next deploy would have shipped it. When a bug is invisible to the test suite and
 invisible in production, check whether production is simply running different
 code before concluding the bug is new.
+
+## A two-second poll was the whole database bill
+
+Neon was charging about $40 a month for a demo that almost nobody opens. Storage
+was a rounding error. The cost was compute hours, and the compute never slept.
+
+Neon suspends compute after five minutes with no queries. The worker ran
+`claim_one` every two seconds, forever, so the database never once got five quiet
+minutes. Fly made it worse in a way the config hid. `auto_stop_machines` lives
+under `http_service`, and the worker was a separate process group with no HTTP
+service, so the setting that looked like "scale to zero" covered only the web
+machine. The worker machine ran all month too, and it was the one keeping the
+database up.
+
+Everything about that worker was right for a product with steady traffic. A
+two-second poll is cheap against a database that is awake anyway. It's wrong for
+an idle demo on usage billing, and nothing in the code or the tests could say so,
+because the cost only shows up on an invoice.
+
+The fix took the worker away rather than tuning it. A longer poll interval would
+still wake the database, just less often, and would still keep a Fly machine
+running. Now the API process drains the queue in a thread it starts at boot and
+after an upload, and the thread exits when `seconds_until_due` says nothing is
+waiting. An idle deployment sends zero queries.
+
+That exposed a second bug. With an always-on worker, a process dying mid-job was
+rare. With the drain inside a web machine that Fly stops whenever traffic stops,
+it's routine. And it was already broken. A job claimed by a process that died
+stayed `running` forever and its document stayed `pending` forever, though the
+docs said the job "runs again". `claim_one` now treats a claim older than ten
+minutes as abandoned.
+
+The sibling `deskhand` already ran its worker inline on one auto-stopping
+machine, and never had this bill. `knowledge-desk-ts` copied the always-on worker
+and would have had it the day it was deployed.
+
+### What to do differently
+
+Treat "what queries does this send when nobody is using it?" as a deploy
+question for anything on scale-to-zero billing. The answer should be "none". Any
+loop that touches the database needs an exit condition. And check which process
+groups an `auto_stop` setting actually covers, rather than reading it as a
+property of the app.
