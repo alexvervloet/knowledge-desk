@@ -208,7 +208,7 @@ def purge_expired_sessions() -> int:
     resolve_session already refuses an expired row, so this is housekeeping
     rather than a security control: without it the table only ever grows, and
     with a 30-day TTL that is a lot of rows nobody will ever read again. Run
-    from the worker, which is the process that already wakes up on a timer.
+    once per queue drain (worker.py), the only background work there is.
     """
     with connect() as conn:
         result = conn.execute("delete from sessions where expires_at <= now()")
