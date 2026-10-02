@@ -19,7 +19,7 @@ class Settings(BaseSettings):
     app_database_url: str = "postgresql://kd_app:kd_app@localhost:5436/knowledge_desk"
 
     # Connection pool bounds. Keep max at or below the database's connection
-    # limit divided by the number of running processes (api plus worker).
+    # limit divided by the number of running processes.
     db_pool_min: int = 1
     db_pool_max: int = 10
 
@@ -50,6 +50,10 @@ class Settings(BaseSettings):
     # machine stopped mid-embed) and is handed out again. One document embeds
     # in seconds, so ten minutes cannot catch a job that is merely slow.
     job_stale_after_seconds: int = 600
+    # The web process drains the queue in a background thread (worker.kick).
+    # The test suite turns this off and drains by calling run_pending itself, so
+    # a thread cannot take a job out from under the test that is asserting on it.
+    drain_in_process: bool = True
 
     # Assistant.
     #

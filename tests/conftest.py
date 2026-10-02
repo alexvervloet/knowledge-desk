@@ -9,6 +9,11 @@ from knowledge_desk.config import settings
 from knowledge_desk.migrate import apply_pending
 from knowledge_desk.ratelimit import auth_limiter, limiter
 
+# Tests drain the queue by calling run_pending themselves. A background drain
+# kicked by an upload would race them for the same jobs. test_worker.py turns it
+# back on where the background drain is the thing under test.
+settings.drain_in_process = False
+
 # Truncating orgs cascades to everything that references it. platform_spend is
 # listed separately because it deliberately has no org_id, so nothing cascades to
 # it and a test's spend would otherwise carry into the next one.
