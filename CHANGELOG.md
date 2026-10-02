@@ -12,6 +12,25 @@ do, not merely a change to security-adjacent code.
 The migration files carry phase numbers in their comments as a record of when
 each was written. The sections below name which phases those were.
 
+## 2026-10-02 — The demo can scale to zero
+
+### Changed
+
+- No always-on worker. It polled the jobs table every two seconds, which kept
+  Neon compute awake around the clock and was about $40 a month for a demo that
+  sits idle. The API process now drains the queue in a background thread. It
+  kicks a drain at startup and after an upload enqueues, waits out retry
+  backoff, and stops when no job is waiting. The `worker` Fly process group and
+  compose service are gone. `python -m knowledge_desk.worker` drains once and
+  exits.
+- Expired sessions are purged once per drain instead of hourly.
+
+### Fixed
+
+- A job whose process died between claim and mark stayed `running` forever and
+  left its document `pending` forever. `claim_one` now hands out a `running`
+  job again once its claim is ten minutes old (`job_stale_after_seconds`).
+
 ## 2026-09-01 — `answer_model` was configurable in name only
 
 ### Fixed
