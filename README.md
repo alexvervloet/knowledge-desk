@@ -85,7 +85,7 @@ flowchart TB
 
     subgraph workers [Background]
         Q[(jobs table<br/>skip-locked, retry, dead-letter)]
-        W[Worker<br/>chunk, embed, store]
+        W[Drain, in the API process<br/>chunk, embed, store]
     end
 
     subgraph data [Postgres + pgvector]
@@ -120,7 +120,7 @@ by default underneath both. A bug in any one of them is not a data leak.
 
 ## Stack
 
-FastAPI, Postgres with pgvector, a Postgres-backed job queue and worker, React
+FastAPI, Postgres with pgvector, a Postgres-backed job queue, React
 plus Vite plus TypeScript, Voyage embeddings, Claude for answers, Langfuse for
 observability, Docker, and GitHub Actions. Runs keyless with a loud mock
 fallback, so it works and tests green with no API keys.
@@ -135,13 +135,12 @@ python -m knowledge_desk.migrate          # creates schema, RLS, and the app rol
 python check_setup.py                     # preflight
 python -m knowledge_desk.seed             # two demo orgs (optional)
 
-uvicorn knowledge_desk.main:app --reload  # API on :8000
-python -m knowledge_desk.worker           # background embedder (separate shell)
+uvicorn knowledge_desk.main:app --reload  # API on :8000, drains the job queue itself
 
 cd frontend && npm install && npm run dev # UI on :5173 (set VITE_API_BASE=http://localhost:8000)
 ```
 
-Or run the whole stack (API + built UI + worker + db) in containers:
+Or run the whole stack (API + built UI + db) in containers:
 
 ```bash
 docker compose up --build                 # app on http://localhost:8000
