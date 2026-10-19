@@ -1,9 +1,9 @@
-fastapi==0.143.0
+fastapi==0.143.3
 uvicorn[standard]==0.54.0
 psycopg[binary]==3.3.6
 psycopg-pool==3.3.3
-pydantic==2.14.0
-pydantic-settings==2.15.0
+pydantic==2.14.1
+pydantic-settings==2.16.0
 python-dotenv==1.2.4
 bcrypt==5.0.0
 pgvector==0.5.1
