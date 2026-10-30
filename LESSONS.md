@@ -1191,3 +1191,30 @@ question for anything on scale-to-zero billing. The answer should be "none". Any
 loop that touches the database needs an exit condition. And check which process
 groups an `auto_stop` setting actually covers, rather than reading it as a
 property of the app.
+
+## The anchor check was green over twenty stale links
+
+`scripts/anchors.py` passed while about twenty line anchors in
+`docs/education/` pointed at the wrong code. The deployment-wide spend ceiling
+linked to `tenancy.py#L468`, which is now the middle of `record_answer`'s
+docstring. `platform_spend_today` had moved to 525. `tenancy.py` grew by about
+fifty lines and nearly every anchor below the growth went stale.
+
+The script missed them for two reasons. It can only detect drift on a link that
+has a symbol title, and most of these had none. For untitled links it checks
+that the text agrees with the anchor and that neither end is a blank line, and a
+stale range usually passes both. Second, its regex only matches links whose
+text is `mod.py:range`. A link written as [`TenantScope.search`](...#L383-L404)
+isn't matched at all, so five links like that had never been checked.
+
+CI couldn't help either. `docs/education/` is gitignored, so the CI checkout has
+no copy of those docs and the "Docs anchors" step never sees them.
+
+### What to do differently
+
+Give every anchor that means one symbol a title, so `--fix` can find it again.
+Only ranges inside a function body, which have no symbol to name, should stay
+untitled. Run `python scripts/anchors.py` locally after changing a module the
+education docs cite, because nothing else will. Named-text links are still
+unchecked. Widening `LINK` to match any link text that has a title would bring
+them under the script.
